@@ -1,10 +1,6 @@
 -- ============================================================
 -- Campus Trading Application - Database Creation Script (MySQL)
 -- ============================================================
--- This script creates all 14 tables with full constraints,
--- referential integrity, and sample data (10-20 rows per table).
--- Requires MySQL 8.0.16+ for CHECK constraint support.
--- ============================================================
 
 -- Drop tables in reverse dependency order if they exist
 DROP TABLE IF EXISTS Message;
