@@ -8,8 +8,10 @@ Database design and implementation for the Campus Trading application (MySQL).
 |------|---------|
 | **CampusTrading.sql** | Single script: DROP → CREATE (14 tables) → INSERT sample data. Run this to build the database. |
 | **Project.md** | Design document: table descriptions, attributes, constraints, and relationships. |
-| **UML_Diagrams_Mermaid.md** | UML class and state-machine diagrams (Mermaid). View in any Mermaid-compatible viewer or GitHub. |
+| **UML_Diagrams_Mermaid.md** | UML class and state-machine diagrams.|
+| **ER_Diagrams_Mermaid.md** | Complete marketplace ER diagram and functionality-specific ER module breakdowns. |
 | **Project.txt** / **Idea.txt** | Project idea and notes. |
+
 
 ## How to run
 
