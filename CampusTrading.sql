@@ -2,6 +2,11 @@
 -- Campus Trading Application - Database Creation Script (MySQL)
 -- ============================================================
 
+
+CREATE DATABASE IF NOT EXISTS CampusTrading;
+USE CampusTrading;
+
+
 -- Drop tables in reverse dependency order if they exist
 DROP TABLE IF EXISTS Message;
 DROP TABLE IF EXISTS MessageThread;
