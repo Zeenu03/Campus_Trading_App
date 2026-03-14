@@ -616,3 +616,119 @@ class BPlusTree:
                 left_child.parent = None
         elif parent.is_underflow():
             self._handle_internal_underflow(parent)
+
+    # ==================== UPDATE OPERATION ====================
+
+    def update(self, key: Any, new_value: Any) -> bool:
+        """
+        Update the value for an existing key.
+
+        Time Complexity: O(log_m n)
+
+        Args:
+            key: The key to update
+            new_value: The new value
+
+        Returns:
+            True if updated, False if key not found
+        """
+        leaf = self._find_leaf(key)
+        return leaf.set_value(key, new_value)
+
+    # ==================== RANGE QUERY ====================
+
+    def range_query(self, start_key: Any, end_key: Any) -> List[Tuple[Any, Any]]:
+        """
+        Return all key-value pairs where start_key <= key <= end_key.
+
+        Time Complexity: O(log_m n + k) where k = number of results
+
+        Leverages the leaf linked list for efficient sequential access.
+
+        Args:
+            start_key: Lower bound (inclusive)
+            end_key: Upper bound (inclusive)
+
+        Returns:
+            List of (key, value) tuples in the range
+        """
+        results = []
+
+        # Find the starting leaf
+        leaf = self._find_leaf(start_key)
+
+        # Scan through leaves using next pointers
+        while leaf:
+            for i, key in enumerate(leaf.keys):
+                if key > end_key:
+                    return results
+                if key >= start_key:
+                    results.append((key, leaf.values[i]))
+            leaf = leaf.next
+
+        return results
+
+    # ==================== UTILITY METHODS ====================
+
+    def get_all(self) -> List[Tuple[Any, Any]]:
+        """
+        Return all key-value pairs in sorted order.
+
+        Uses the leaf linked list for efficient traversal.
+
+        Returns:
+            List of all (key, value) tuples
+        """
+        results = []
+
+        # Find leftmost leaf
+        node = self.root
+        while not node.is_leaf():
+            node = node.children[0]
+
+        # Traverse linked list
+        while node:
+            for i, key in enumerate(node.keys):
+                results.append((key, node.values[i]))
+            node = node.next
+
+        return results
+
+    def get_height(self) -> int:
+        """
+        Get the height of the tree.
+
+        Returns:
+            Number of levels in the tree
+        """
+        height = 0
+        node = self.root
+        while not node.is_leaf():
+            height += 1
+            node = node.children[0]
+        return height + 1
+
+    def get_leftmost_leaf(self) -> LeafNode:
+        """Get the leftmost leaf node."""
+        node = self.root
+        while not node.is_leaf():
+            node = node.children[0]
+        return node
+
+    def get_rightmost_leaf(self) -> LeafNode:
+        """Get the rightmost leaf node."""
+        node = self.root
+        while not node.is_leaf():
+            node = node.children[-1]
+        return node
+
+    def __len__(self) -> int:
+        """Return the number of key-value pairs in the tree."""
+        return self._size
+
+    def __contains__(self, key: Any) -> bool:
+        """Check if a key exists in the tree."""
+        return self.search(key) is not None
+
+    def __repr__(self) -> str:
+        return f"BPlusTree(order={self.order}, size={self._size}, height={self.get_height()})"
