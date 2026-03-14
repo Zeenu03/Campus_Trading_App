@@ -313,3 +313,306 @@ class BPlusTree:
             # Split parent if necessary
             if parent.is_full():
                 self._split_internal(parent)
+
+    # ==================== DELETE OPERATIONS ====================
+
+    def delete(self, key: Any) -> bool:
+        """
+        Delete a key from the B+ Tree.
+
+        Time Complexity: O(log_m n)
+
+        Args:
+            key: The key to delete
+
+        Returns:
+            True if deletion succeeded, False if key not found
+        """
+        leaf = self._find_leaf(key)
+
+        # Find key in leaf
+        try:
+            idx = leaf.keys.index(key)
+        except ValueError:
+            return False  # Key not found
+
+        # Remove key-value pair
+        leaf.remove_at(idx)
+        self._size -= 1
+
+        # If this is the root leaf, we're done (can have any number of keys)
+        if leaf == self.root:
+            return True
+
+        # Handle underflow if necessary
+        if leaf.is_underflow():
+            self._handle_leaf_underflow(leaf)
+
+        return True
+
+    def _delete(self, node: Node, key: Any) -> bool:
+        """
+        Recursive helper for deletion.
+
+        Args:
+            node: Current node
+            key: Key to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        if node.is_leaf():
+            try:
+                idx = node.keys.index(key)
+                node.remove_at(idx)
+                return True
+            except ValueError:
+                return False
+        else:
+            # Find appropriate child
+            child_idx = node.find_child_index(key)
+            result = self._delete(node.children[child_idx], key)
+
+            if result and node.children[child_idx].is_underflow():
+                self._fill_child(node, child_idx)
+
+            return result
+
+    def _handle_leaf_underflow(self, leaf: LeafNode) -> None:
+        """
+        Handle underflow in a leaf node.
+
+        Strategy:
+        1. Try to borrow from left sibling
+        2. Try to borrow from right sibling
+        3. Merge with a sibling
+
+        Args:
+            leaf: The leaf node with underflow
+        """
+        parent = leaf.parent
+        if parent is None:
+            return
+
+        idx = parent.children.index(leaf)
+        min_keys = leaf.min_keys()
+
+        # Try borrowing from left sibling
+        if idx > 0:
+            left_sibling = parent.children[idx - 1]
+            if len(left_sibling.keys) > min_keys:
+                self._borrow_from_prev(parent, idx)
+                return
+
+        # Try borrowing from right sibling
+        if idx < len(parent.children) - 1:
+            right_sibling = parent.children[idx + 1]
+            if len(right_sibling.keys) > min_keys:
+                self._borrow_from_next(parent, idx)
+                return
+
+        # Merge with sibling
+        if idx > 0:
+            self._merge(parent, idx - 1)
+        else:
+            self._merge(parent, idx)
+
+    def _handle_internal_underflow(self, node: InternalNode) -> None:
+        """Handle underflow in an internal node."""
+        if node == self.root:
+            # If root is empty but has children, make first child the new root
+            if not node.keys and node.children:
+                self.root = node.children[0]
+                self.root.parent = None
+            return
+
+        parent = node.parent
+        idx = parent.children.index(node)
+        min_keys = node.min_keys()
+
+        # Try borrowing from left sibling
+        if idx > 0:
+            left_sibling = parent.children[idx - 1]
+            if len(left_sibling.keys) > min_keys:
+                self._borrow_from_prev_internal(parent, idx)
+                return
+
+        # Try borrowing from right sibling
+        if idx < len(parent.children) - 1:
+            right_sibling = parent.children[idx + 1]
+            if len(right_sibling.keys) > min_keys:
+                self._borrow_from_next_internal(parent, idx)
+                return
+
+        # Merge with sibling
+        if idx > 0:
+            self._merge_internal(parent, idx - 1)
+        else:
+            self._merge_internal(parent, idx)
+
+    def _fill_child(self, node: InternalNode, index: int) -> None:
+        """
+        Ensure child at given index has enough keys.
+
+        Args:
+            node: Parent node
+            index: Index of the child to fill
+        """
+        child = node.children[index]
+        min_keys = child.min_keys()
+
+        # Try borrowing from left sibling
+        if index > 0 and len(node.children[index - 1].keys) > min_keys:
+            if child.is_leaf():
+                self._borrow_from_prev(node, index)
+            else:
+                self._borrow_from_prev_internal(node, index)
+            return
+
+        # Try borrowing from right sibling
+        if index < len(node.children) - 1 and len(node.children[index + 1].keys) > min_keys:
+            if child.is_leaf():
+                self._borrow_from_next(node, index)
+            else:
+                self._borrow_from_next_internal(node, index)
+            return
+
+        # Merge with sibling
+        if index < len(node.children) - 1:
+            if child.is_leaf():
+                self._merge(node, index)
+            else:
+                self._merge_internal(node, index)
+        else:
+            if child.is_leaf():
+                self._merge(node, index - 1)
+            else:
+                self._merge_internal(node, index - 1)
+
+    def _borrow_from_prev(self, parent: InternalNode, index: int) -> None:
+        """
+        Borrow a key from the left sibling (leaf nodes).
+
+        Args:
+            parent: Parent node
+            index: Index of the borrowing child
+        """
+        child = parent.children[index]
+        left_sibling = parent.children[index - 1]
+
+        # Move last key-value from left sibling to beginning of child
+        key, value = left_sibling.remove_at(len(left_sibling.keys) - 1)
+        child.insert_at(0, key, value)
+
+        # Update parent key
+        parent.keys[index - 1] = child.keys[0]
+
+    def _borrow_from_next(self, parent: InternalNode, index: int) -> None:
+        """
+        Borrow a key from the right sibling (leaf nodes).
+
+        Args:
+            parent: Parent node
+            index: Index of the borrowing child
+        """
+        child = parent.children[index]
+        right_sibling = parent.children[index + 1]
+
+        # Move first key-value from right sibling to end of child
+        key, value = right_sibling.remove_at(0)
+        child.insert_at(len(child.keys), key, value)
+
+        # Update parent key
+        parent.keys[index] = right_sibling.keys[0]
+
+    def _borrow_from_prev_internal(self, parent: InternalNode, index: int) -> None:
+        """Borrow from left sibling for internal nodes."""
+        child = parent.children[index]
+        left_sibling = parent.children[index - 1]
+
+        # Move key from parent down to child
+        child.keys.insert(0, parent.keys[index - 1])
+
+        # Move last key from sibling up to parent
+        parent.keys[index - 1] = left_sibling.keys.pop()
+
+        # Move last child from sibling
+        moved_child = left_sibling.children.pop()
+        child.children.insert(0, moved_child)
+        moved_child.parent = child
+
+    def _borrow_from_next_internal(self, parent: InternalNode, index: int) -> None:
+        """Borrow from right sibling for internal nodes."""
+        child = parent.children[index]
+        right_sibling = parent.children[index + 1]
+
+        # Move key from parent down to child
+        child.keys.append(parent.keys[index])
+
+        # Move first key from sibling up to parent
+        parent.keys[index] = right_sibling.keys.pop(0)
+
+        # Move first child from sibling
+        moved_child = right_sibling.children.pop(0)
+        child.children.append(moved_child)
+        moved_child.parent = child
+
+    def _merge(self, parent: InternalNode, index: int) -> None:
+        """
+        Merge child at index with child at index+1 (leaf nodes).
+
+        Args:
+            parent: Parent node
+            index: Index of the left child to merge
+        """
+        left_child = parent.children[index]
+        right_child = parent.children[index + 1]
+
+        # Merge keys and values
+        left_child.keys.extend(right_child.keys)
+        left_child.values.extend(right_child.values)
+
+        # Update linked list
+        left_child.next = right_child.next
+        if right_child.next:
+            right_child.next.prev = left_child
+
+        # Remove separator key and right child from parent
+        parent.keys.pop(index)
+        parent.children.pop(index + 1)
+
+        # Handle parent underflow
+        if parent == self.root:
+            if not parent.keys:
+                self.root = left_child
+                left_child.parent = None
+        elif parent.is_underflow():
+            self._handle_internal_underflow(parent)
+
+    def _merge_internal(self, parent: InternalNode, index: int) -> None:
+        """Merge internal nodes."""
+        left_child = parent.children[index]
+        right_child = parent.children[index + 1]
+
+        # Pull down separator key from parent
+        left_child.keys.append(parent.keys[index])
+
+        # Merge keys and children
+        left_child.keys.extend(right_child.keys)
+        left_child.children.extend(right_child.children)
+
+        # Update parent pointers for moved children
+        for child in right_child.children:
+            child.parent = left_child
+
+        # Remove from parent
+        parent.keys.pop(index)
+        parent.children.pop(index + 1)
+
+        # Handle parent underflow
+        if parent == self.root:
+            if not parent.keys:
+                self.root = left_child
+                left_child.parent = None
+        elif parent.is_underflow():
+            self._handle_internal_underflow(parent)
