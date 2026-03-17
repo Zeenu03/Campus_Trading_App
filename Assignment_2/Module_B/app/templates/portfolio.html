@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}{{ portfolio.member.name }}'s Portfolio{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <!-- Profile Card -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm text-center mb-3">
+      <div class="card-body p-4">
+        <i class="bi bi-person-circle display-3 text-muted"></i>
+        <h4 class="fw-bold mt-3 mb-1">{{ portfolio.member.name }}</h4>
+        {% if portfolio.member.is_verified %}
+        <span class="badge bg-success mb-2"><i class="bi bi-patch-check me-1"></i>Verified</span>
+        {% endif %}
+        <p class="text-muted small mb-1">{{ portfolio.member.department or '—' }} · Year {{ portfolio.member.year_of_study or '?' }}</p>
+        <p class="text-muted small mb-3">{{ portfolio.member.hostel or '' }}{% if portfolio.member.room_number %}, Room {{ portfolio.member.room_number }}{% endif %}</p>
+        {% if portfolio.member.bio %}<p class="text-muted small">{{ portfolio.member.bio }}</p>{% endif %}
+        <p class="text-muted small">Member since {{ portfolio.member.member_since[:10] if portfolio.member.member_since else '—' }}</p>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white py-3"><h6 class="fw-bold mb-0">Stats</h6></div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item d-flex justify-content-between">
+            <span><i class="bi bi-tag me-2 text-primary"></i>Active Listings</span>
+            <strong>{{ portfolio.stats.active_listings }}</strong>
+          </li>
+          <li class="list-group-item d-flex justify-content-between">
+            <span><i class="bi bi-arrow-up-right me-2 text-success"></i>Total Sales</span>
+            <strong>{{ portfolio.stats.total_sales }}</strong>
+          </li>
+          <li class="list-group-item d-flex justify-content-between">
+            <span><i class="bi bi-arrow-down-left me-2 text-info"></i>Total Purchases</span>
+            <strong>{{ portfolio.stats.total_purchases }}</strong>
+          </li>
+          <li class="list-group-item d-flex justify-content-between">
+            <span><i class="bi bi-star me-2 text-warning"></i>Avg Rating</span>
+            <strong>{{ "%.1f"|format(portfolio.stats.average_rating) if portfolio.stats.average_rating else '—' }} / 5</strong>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Listings & Ratings -->
+  <div class="col-lg-8">
+    <!-- Active Listings -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 d-flex justify-content-between">
+        <h6 class="fw-bold mb-0"><i class="bi bi-tags me-2 text-primary"></i>Active Listings</h6>
+      </div>
+      <div class="card-body p-0">
+        {% if portfolio.active_listings %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>Item</th><th>Price</th><th>Condition</th><th></th></tr></thead>
+            <tbody>
+            {% for listing in portfolio.active_listings %}
+            <tr>
+              <td class="fw-medium">{{ listing.title }}</td>
+              <td>₹{{ "%.0f"|format(listing.asking_price) }}</td>
+              <td><span class="badge bg-secondary">{{ listing.condition or '—' }}</span></td>
+              <td><a href="{{ url_for('views.listing_detail_page', id=listing.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-center text-muted py-4">No active listings</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Ratings -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white py-3">
+        <h6 class="fw-bold mb-0"><i class="bi bi-star me-2 text-warning"></i>Reviews Received</h6>
+      </div>
+      <div class="card-body">
+        {% if portfolio.ratings_received %}
+        {% for rating in portfolio.ratings_received %}
+        <div class="border rounded p-3 mb-2">
+          <div class="d-flex justify-content-between">
+            <strong class="small">{{ rating.rater_name or 'Anonymous' }}</strong>
+            <div>
+              {% for i in range(1, 6) %}
+              <i class="bi bi-star{% if i <= rating.stars %}-fill text-warning{% endif %}"></i>
+              {% endfor %}
+            </div>
+          </div>
+          {% if rating.review %}<p class="text-muted small mb-0 mt-1">{{ rating.review }}</p>{% endif %}
+          <small class="text-muted">{{ rating.rating_date[:10] if rating.rating_date else '' }}</small>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-center text-muted py-3">No reviews yet</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

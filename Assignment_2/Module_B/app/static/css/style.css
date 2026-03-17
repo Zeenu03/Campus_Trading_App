@@ -1,0 +1,83 @@
+/* Campus Trading - Custom Styles */
+
+:root {
+  --ct-primary: #0d6efd;
+  --ct-border-radius: 0.75rem;
+}
+
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Card enhancements */
+.card {
+  border-radius: var(--ct-border-radius);
+}
+
+.shadow-sm {
+  box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Listing card */
+.listing-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+}
+.listing-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.12) !important;
+}
+
+.listing-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.listing-img-placeholder {
+  width: 100%;
+  height: 180px;
+}
+
+/* Navbar */
+.navbar-brand {
+  font-size: 1.2rem;
+  letter-spacing: -0.5px;
+}
+
+/* Table */
+.table th {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6c757d;
+}
+
+/* Stat cards */
+.stat-card-icon {
+  font-size: 2.5rem;
+  opacity: 0.2;
+}
+
+/* Badges */
+.badge {
+  font-weight: 500;
+}
+
+/* Buttons */
+.btn {
+  border-radius: 0.5rem;
+}
+
+/* Form controls */
+.form-control,
+.form-select {
+  border-radius: 0.5rem;
+}
+
+/* Audit log rows */
+.table-danger td {
+  background-color: rgba(220, 53, 69, 0.05) !important;
+}

@@ -1,0 +1,12 @@
+Query: Q5 — Price range query (₹100–₹1000)
+======================================================================
+
+BEFORE INDEXES:
+  {'EXPLAIN': "-> Filter: ((listing.`Status` = 'Listed') and (listing.AskingPrice between 100 and 1000))  (cost=1.75 rows=1)\n    -> Table scan on Listing  (cost=1.75 rows=15)\n"}
+
+AFTER INDEXES:
+  {'EXPLAIN': "-> Filter: ((listing.`Status` = 'Listed') and (listing.AskingPrice between 100 and 1000))  (cost=1.75 rows=1)\n    -> Table scan on Listing  (cost=1.75 rows=15)\n"}
+
+Avg time BEFORE: 0.293 ms
+Avg time AFTER:  0.299 ms
+Improvement:     1.0x

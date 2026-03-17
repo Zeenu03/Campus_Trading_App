@@ -1,0 +1,3 @@
+[2026-03-18 00:48:16] [INFO] action=UPDATE | table=Listing | record_id=1 | endpoint=POST /listings/1/edit
+[2026-03-18 00:48:30] [INFO] action=CREATE | table=Listing | record_id=15 | endpoint=POST /listings/create
+[2026-03-18 00:49:03] [INFO] action=CREATE | table=Offer | record_id=7 | endpoint=POST /listings/3/offer

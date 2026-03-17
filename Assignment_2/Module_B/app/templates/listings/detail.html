@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block title %}{{ listing.title }}{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('views.listings_page') }}">Listings</a></li>
+    <li class="breadcrumb-item active">{{ listing.title }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+
+  <!-- Left: Details -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <h4 class="fw-bold mb-0">{{ listing.title }}</h4>
+          <span class="badge fs-6
+            {% if listing.status == 'Listed' %}bg-success
+            {% elif listing.status == 'Pending' %}bg-warning text-dark
+            {% elif listing.status == 'Sold' %}bg-secondary
+            {% else %}bg-danger{% endif %}">
+            {{ listing.status }}
+          </span>
+        </div>
+
+        <h3 class="fw-bold mb-3 {% if listing.is_donation %}text-success{% else %}text-primary{% endif %}">
+          {% if listing.is_donation %}FREE (Donation)
+          {% else %}₹{{ "%.0f"|format(listing.asking_price) }}
+            {% if listing.is_negotiable %}<small class="fs-6 text-muted fw-normal">(Negotiable)</small>{% endif %}
+          {% endif %}
+        </h3>
+
+        {% if listing.images %}
+        <img src="{{ listing.images[0].url }}" class="img-fluid rounded mb-3"
+             style="max-height:300px;object-fit:cover;width:100%;" alt="{{ listing.title }}">
+        {% endif %}
+
+        <table class="table table-borderless table-sm mb-0">
+          {% if listing.condition %}
+          <tr><th class="text-muted" style="width:35%">Condition</th><td>{{ listing.condition }}</td></tr>
+          {% endif %}
+          {% if listing.course_code %}
+          <tr><th class="text-muted">Course Code</th><td>{{ listing.course_code }}</td></tr>
+          {% endif %}
+          {% if listing.meeting_location %}
+          <tr><th class="text-muted">Meeting Point</th><td>{{ listing.meeting_location }}</td></tr>
+          {% endif %}
+          <tr><th class="text-muted">Posted</th>
+              <td>{{ listing.created_date[:10] if listing.created_date else '—' }}</td></tr>
+        </table>
+
+        {% if listing.description %}
+        <hr>
+        <h6 class="fw-bold">Description</h6>
+        <p class="text-muted mb-0">{{ listing.description }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Seller + Actions -->
+  <div class="col-lg-4">
+
+    <!-- Seller card -->
+    {% if listing.seller %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body text-center py-3">
+        <i class="bi bi-person-circle fs-1 text-muted"></i>
+        <h6 class="fw-bold mt-2 mb-0">{{ listing.seller.name }}</h6>
+        <small class="text-muted">Seller</small>
+        <div class="mt-2">
+          <a href="{{ url_for('views.portfolio_page', id=listing.seller_id) }}"
+             class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-person me-1"></i>View Profile
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if session.get('user') %}
+      {% set is_owner = (session['user'].get('member_id') == listing.seller_id) or (session['user']['role'] == 'Admin') %}
+      {% set is_admin_user = session['user']['role'] == 'Admin' %}
+
+      {% if is_owner %}
+      <!-- Owner/Admin controls -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold py-2">Manage Listing</div>
+        <div class="card-body d-grid gap-2">
+
+          {% if listing.status == 'Listed' or listing.status == 'Closed' %}
+          <a href="{{ url_for('views.edit_listing_page', id=listing.id) }}"
+             class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-pencil me-1"></i>Edit Listing
+          </a>
+          {% endif %}
+
+          {% if listing.status == 'Listed' %}
+          <form method="POST" action="{{ url_for('views.close_listing', id=listing.id) }}">
+            <button type="submit" class="btn btn-outline-warning btn-sm w-100">
+              <i class="bi bi-x-circle me-1"></i>Close Listing
+            </button>
+          </form>
+          {% endif %}
+
+          {% if listing.status == 'Closed' %}
+          <form method="POST" action="{{ url_for('views.relist_listing', id=listing.id) }}">
+            <button type="submit" class="btn btn-outline-success btn-sm w-100">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Re-list
+            </button>
+          </form>
+          {% endif %}
+
+          {% if is_admin_user %}
+          <form method="POST" action="{{ url_for('views.delete_listing', id=listing.id) }}"
+                onsubmit="return confirm('Delete this listing permanently?')">
+            <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+              <i class="bi bi-trash me-1"></i>Delete (Admin)
+            </button>
+          </form>
+          {% endif %}
+
+        </div>
+      </div>
+
+      {% elif listing.status == 'Listed' %}
+      <!-- Buyer: make offer -->
+      <div class="card border-0 shadow-sm border-primary">
+        <div class="card-header bg-primary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-tag me-2"></i>Make an Offer</h6>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('views.make_offer', id=listing.id) }}">
+            <div class="mb-2">
+              <label class="form-label small fw-medium">Your Offer (₹)</label>
+              <input type="number" name="offered_price" class="form-control form-control-sm"
+                     placeholder="{{ listing.asking_price }}" min="1" step="0.01" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-medium">Message (optional)</label>
+              <textarea name="message" class="form-control form-control-sm" rows="2"
+                        placeholder="Any message to the seller?"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-send me-1"></i>Submit Offer
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {% else %}
+      <div class="alert alert-secondary">
+        <i class="bi bi-info-circle me-2"></i>This listing is no longer available.
+      </div>
+      {% endif %}
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+Query: Q1 — Listings by category + status (Browse)
+======================================================================
+
+BEFORE INDEXES:
+  {'EXPLAIN': "-> Sort: listing.CreatedDate DESC  (cost=1 rows=5)\n    -> Index lookup on Listing using IDX_Listing_Category_Status (CategoryID = 2, Status = 'Listed')  (cost=1 rows=5)\n"}
+
+AFTER INDEXES:
+  {'EXPLAIN': "-> Sort: listing.CreatedDate DESC  (cost=1 rows=5)\n    -> Index lookup on Listing using IDX_Listing_Category_Status (CategoryID = 2, Status = 'Listed')  (cost=1 rows=5)\n"}
+
+Avg time BEFORE: 0.338 ms
+Avg time AFTER:  0.292 ms
+Improvement:     1.2x

@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}My Offers{% endblock %}
+{% block content %}
+
+<h3 class="fw-bold mb-4"><i class="bi bi-tag me-2 text-primary"></i>Offers</h3>
+
+<div class="row g-4">
+
+  <!-- Offers Received -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white fw-bold py-3">
+        <i class="bi bi-inbox me-2 text-success"></i>Offers Received
+        <span class="badge bg-secondary ms-1">{{ received|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if received %}
+        <div class="list-group list-group-flush">
+          {% for offer in received %}
+          <div class="list-group-item py-3">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <div>
+                <strong>₹{{ "%.0f"|format(offer.OfferedPrice) }}</strong>
+                <span class="text-muted small"> on
+                  <a href="{{ url_for('views.listing_detail_page', id=offer.ListingID) }}">
+                    {{ offer.listing.Title if offer.listing else '#'+offer.ListingID|string }}
+                  </a>
+                </span>
+              </div>
+              <span class="badge bg-{{
+                'warning text-dark' if offer.OfferStatus == 'Submitted' else
+                'success'           if offer.OfferStatus == 'Accepted'  else
+                'secondary'}}">{{ offer.OfferStatus }}</span>
+            </div>
+            <div class="text-muted small mb-2">
+              From: {{ offer.buyer.Name if offer.buyer else '—' }} ·
+              {{ offer.SubmittedDate.strftime('%d %b %Y') if offer.SubmittedDate else '' }}
+            </div>
+            {% if offer.OfferMessage %}
+            <p class="small text-muted fst-italic mb-2">"{{ offer.OfferMessage }}"</p>
+            {% endif %}
+            {% if offer.OfferStatus == 'Submitted' %}
+            <div class="d-flex gap-2">
+              <form method="POST" action="{{ url_for('views.accept_offer', id=offer.OfferID) }}">
+                <button type="submit" class="btn btn-sm btn-success">
+                  <i class="bi bi-check me-1"></i>Accept
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('views.decline_offer', id=offer.OfferID) }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-x me-1"></i>Decline
+                </button>
+              </form>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-inbox display-5 mb-3 d-block"></i>No offers received yet
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Offers Sent -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white fw-bold py-3">
+        <i class="bi bi-send me-2 text-primary"></i>Offers Sent
+        <span class="badge bg-secondary ms-1">{{ sent|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if sent %}
+        <div class="list-group list-group-flush">
+          {% for offer in sent %}
+          <div class="list-group-item py-3">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <div>
+                <strong>₹{{ "%.0f"|format(offer.OfferedPrice) }}</strong>
+                <span class="text-muted small"> on
+                  <a href="{{ url_for('views.listing_detail_page', id=offer.ListingID) }}">
+                    {{ offer.listing.Title if offer.listing else '#'+offer.ListingID|string }}
+                  </a>
+                </span>
+              </div>
+              <span class="badge bg-{{
+                'warning text-dark' if offer.OfferStatus == 'Submitted' else
+                'success'           if offer.OfferStatus == 'Accepted'  else
+                'secondary'}}">{{ offer.OfferStatus }}</span>
+            </div>
+            <div class="text-muted small mb-2">
+              {{ offer.SubmittedDate.strftime('%d %b %Y') if offer.SubmittedDate else '' }}
+            </div>
+            {% if offer.OfferStatus == 'Submitted' %}
+            <form method="POST" action="{{ url_for('views.withdraw_offer', id=offer.OfferID) }}">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-x-circle me-1"></i>Withdraw
+              </button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-send display-5 mb-3 d-block"></i>No offers sent yet
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
