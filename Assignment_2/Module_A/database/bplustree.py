@@ -732,3 +732,121 @@ class BPlusTree:
 
     def __repr__(self) -> str:
         return f"BPlusTree(order={self.order}, size={self._size}, height={self.get_height()})"
+
+
+    # ==================== VISUALIZATION ====================
+
+    def visualize_tree(self, filename: str = 'bptree') -> Optional['Digraph']:
+        """
+        Generate a Graphviz visualization of the B+ Tree.
+
+        Args:
+            filename: Base filename for output (without extension)
+
+        Returns:
+            Graphviz Digraph object if graphviz is available, None otherwise
+        """
+        if not GRAPHVIZ_AVAILABLE:
+            print("Graphviz not available. Install with: pip install graphviz")
+            return None
+
+        dot = Digraph(comment='B+ Tree')
+        dot.attr(rankdir='TB')  # Top to bottom layout
+        dot.attr('node', fontsize='10')
+
+        if self.root:
+            self._add_nodes(dot, self.root)
+            self._add_edges(dot, self.root)
+            self._add_leaf_links(dot)
+
+        return dot
+
+    def _add_nodes(self, dot: 'Digraph', node: Node) -> None:
+        """
+        Recursively add nodes to the Graphviz diagram.
+
+        Args:
+            dot: Graphviz Digraph object
+            node: Current node to add
+        """
+        node_id = str(id(node))
+
+        if node.is_leaf():
+            # Leaf node: show keys and values
+            if node.keys:
+                lines = []
+                for k, v in zip(node.keys, node.values):
+                    v_str = str(v)[:15] + '...' if len(str(v)) > 15 else str(v)
+                    lines.append(f"{k}: {v_str}")
+                label = '\n'.join(lines)
+            else:
+                label = "(empty)"
+
+            dot.node(node_id, label,
+                    shape='box', color='darkgreen',
+                    style='filled', fillcolor='lightgreen')
+        else:
+            # Internal node: show separator keys
+            label = str(node.keys) if node.keys else "[]"
+
+            dot.node(node_id, label,
+                    shape='ellipse', color='darkblue',
+                    style='filled', fillcolor='lightblue')
+
+            # Recursively add children
+            for child in node.children:
+                self._add_nodes(dot, child)
+
+    def _add_edges(self, dot: 'Digraph', node: Node) -> None:
+        """
+        Add edges from internal nodes to their children.
+
+        Args:
+            dot: Graphviz Digraph object
+            node: Current node
+        """
+        if not node.is_leaf():
+            node_id = str(id(node))
+            for child in node.children:
+                child_id = str(id(child))
+                dot.edge(node_id, child_id)
+                self._add_edges(dot, child)
+
+    def _add_leaf_links(self, dot: 'Digraph') -> None:
+        """
+        Add dashed lines showing the leaf linked list.
+
+        Args:
+            dot: Graphviz Digraph object
+        """
+        # Find leftmost leaf
+        leaf = self.get_leftmost_leaf()
+
+        # Create subgraph for same rank
+        with dot.subgraph() as s:
+            s.attr(rank='same')
+            while leaf:
+                s.node(str(id(leaf)))
+                leaf = leaf.next
+
+        # Add dashed edges between leaves
+        leaf = self.get_leftmost_leaf()
+        while leaf and leaf.next:
+            dot.edge(str(id(leaf)), str(id(leaf.next)),
+                    style='dashed', color='red', constraint='false')
+            leaf = leaf.next
+
+    def print_tree(self) -> None:
+        """Print a text representation of the tree structure."""
+        self._print_node(self.root, 0)
+
+    def _print_node(self, node: Node, level: int) -> None:
+        """Recursively print nodes with indentation."""
+        indent = "  " * level
+        if node.is_leaf():
+            pairs = list(zip(node.keys, node.values))
+            print(f"{indent}Leaf: {pairs}")
+        else:
+            print(f"{indent}Internal: {node.keys}")
+            for child in node.children:
+                self._print_node(child, level + 1)
