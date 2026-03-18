@@ -102,41 +102,6 @@ analyzer.print_summary()
 jupyter notebook report.ipynb
 ```
 
-## Features
-
-### B+ Tree Operations
-
-| Operation | Time Complexity | Description |
-|-----------|-----------------|-------------|
-| `search(key)` | O(log n) | Find value by key |
-| `insert(key, value)` | O(log n) | Insert/update key-value |
-| `delete(key)` | O(log n) | Remove key |
-| `range_query(start, end)` | O(log n + k) | Find all keys in range |
-| `update(key, value)` | O(log n) | Update existing key |
-| `get_all()` | O(n) | Get all key-value pairs |
-| `visualize_tree()` | O(n) | Generate Graphviz diagram |
-
-### Benchmarking
-
-The `PerformanceAnalyzer` class automatically benchmarks:
-- Insert operations
-- Search operations
-- Range queries
-- Delete operations
-
-Generates:
-- Combined performance comparison plot
-- Individual operation plots
-- Speedup comparison chart
-- Summary statistics table
-
-## B+ Tree Properties
-
-- **Order**: Configurable (default: 4)
-- **Balance**: All leaves at same level
-- **Leaf Links**: Doubly-linked list for range queries
-- **Data Storage**: All data in leaf nodes
-
 ## Authors
 
 Team 8 - CS432 Databases
