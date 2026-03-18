@@ -1,0 +1,24 @@
+# Module A: B+ Tree Implementation Dependencies
+# Campus Trading Application - CS432 Database Project
+
+# Core Dependencies
+graphviz>=0.20.1
+matplotlib>=3.7.0
+numpy>=1.24.0
+
+# Jupyter Notebook
+jupyter>=1.0.0
+notebook>=7.0.0
+ipykernel>=6.0.0
+
+# Data Analysis
+pandas>=2.0.0
+
+# Progress Bar
+tqdm>=4.65.0
+
+# Optional: Memory Profiling
+memory-profiler>=0.61.0
+
+# Optional: Better Jupyter Output
+ipywidgets>=8.0.0
