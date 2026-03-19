@@ -55,7 +55,7 @@ type Member struct {
 	IsVerified          bool       `json:"is_verified"`
 	VerificationDate    *time.Time `json:"verification_date"`
 	AccountCreationDate time.Time  `json:"account_creation_date"`
-	AccountStatus       string     `json:"account_status"`
+	IsActive            bool       `json:"is_active"`
 }
 
 type Administrator struct {

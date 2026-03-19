@@ -62,8 +62,8 @@ export default function Portfolio() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{member.name}</h1>
             {member.is_verified && <span className="badge-green text-xs">Verified</span>}
-            <span className={`badge text-xs ${member.account_status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {member.account_status}
+            <span className={`badge text-xs ${member.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+              {member.is_active ? 'Active' : 'Deactivated'}
             </span>
           </div>
           <p className="text-gray-500 text-sm mt-1">{member.email}</p>

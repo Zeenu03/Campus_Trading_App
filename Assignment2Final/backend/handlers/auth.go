@@ -238,17 +238,17 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		var name, contact string
 		var dept, hostel, room, bio, img *string
 		var yrStudy *int
-		var accountStatus string
+		var isActive bool
 		_ = appdb.DB.QueryRowContext(ctx,
-			`SELECT Name, ContactNumber, Department, YearOfStudy, Hostel, RoomNumber, Bio, Image, AccountStatus
-             FROM Member WHERE MemberID = ?`, memberID,
-		).Scan(&name, &contact, &dept, &yrStudy, &hostel, &room, &bio, &img, &accountStatus)
+			`SELECT m.Name, m.ContactNumber, m.Department, m.YearOfStudy, m.Hostel, m.RoomNumber, m.Bio, m.Image, u.is_active
+             FROM Member m JOIN sys_user u ON u.user_id = m.user_id WHERE m.MemberID = ?`, memberID,
+		).Scan(&name, &contact, &dept, &yrStudy, &hostel, &room, &bio, &img, &isActive)
 		resp["name"] = name
 		resp["contact_number"] = contact
 		resp["department"] = dept
 		resp["year_of_study"] = yrStudy
 		resp["hostel"] = hostel
-		resp["account_status"] = accountStatus
+		resp["is_active"] = isActive
 	} else {
 		var adminID int
 		var name, role string

@@ -171,7 +171,7 @@ func AdminStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var totalMembers, activeListings, openReports, totalTransactions int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM Member WHERE AccountStatus = 'Active'`).Scan(&totalMembers)
+	_ = appdb.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM Member m JOIN sys_user u ON u.user_id = m.user_id WHERE u.is_active = TRUE`).Scan(&totalMembers)
 	_ = appdb.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM Listing WHERE Status = 'Listed'`).Scan(&activeListings)
 	_ = appdb.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM Report WHERE Status IN ('Submitted','UnderReview')`).Scan(&openReports)
 	_ = appdb.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM Transaction WHERE Status = 'Completed'`).Scan(&totalTransactions)
@@ -270,20 +270,20 @@ func AdminGetMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result struct {
-		MemberID      int     `json:"member_id"`
-		UserID        int     `json:"user_id"`
-		Name          string  `json:"name"`
-		Email         string  `json:"email"`
-		Contact       string  `json:"contact_number"`
-		Dept          *string `json:"department"`
-		AccountStatus string  `json:"account_status"`
+		MemberID int     `json:"member_id"`
+		UserID   int     `json:"user_id"`
+		Name     string  `json:"name"`
+		Email    string  `json:"email"`
+		Contact  string  `json:"contact_number"`
+		Dept     *string `json:"department"`
+		IsActive bool    `json:"is_active"`
 	}
 	err = appdb.DB.QueryRowContext(r.Context(),
-		`SELECT m.MemberID, m.user_id, m.Name, u.email, m.ContactNumber, m.Department, m.AccountStatus
+		`SELECT m.MemberID, m.user_id, m.Name, u.email, m.ContactNumber, m.Department, u.is_active
          FROM Member m JOIN sys_user u ON u.user_id = m.user_id
          WHERE m.MemberID = ?`, memberID,
 	).Scan(&result.MemberID, &result.UserID, &result.Name, &result.Email,
-		&result.Contact, &result.Dept, &result.AccountStatus)
+		&result.Contact, &result.Dept, &result.IsActive)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "member not found")
 		return

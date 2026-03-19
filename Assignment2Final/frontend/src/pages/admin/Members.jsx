@@ -33,13 +33,13 @@ export default function AdminMembers() {
     setActionId(memberId);
     try {
       if (action === 'delete') {
-        if (!confirm('Soft-delete this member? This will revoke sessions and withdraw listings.')) return;
+        if (!confirm('Remove this member? This will deactivate the account, revoke sessions, and withdraw listings.')) return;
         await api.delete(`/members/${memberId}`);
-        toast.success('Member deleted');
+        toast.success('Member removed');
       } else {
-        const accountStatus = action === 'suspend' ? 'Suspended' : 'Active';
-        await api.put(`/members/${memberId}`, { account_status: accountStatus });
-        toast.success(`Member ${action === 'suspend' ? 'suspended' : 'activated'}`);
+        const isActive = action === 'activate';
+        await api.put(`/members/${memberId}`, { is_active: isActive });
+        toast.success(isActive ? 'Member activated' : 'Member deactivated');
       }
       load();
     } catch (err) {
@@ -49,9 +49,8 @@ export default function AdminMembers() {
     }
   };
 
-  const statusColors = {
-    Active: 'badge-green', Suspended: 'badge-yellow', Deleted: 'badge-red',
-  };
+  const statusBadge = (isActive) =>
+    isActive ? { className: 'badge-green', label: 'Active' } : { className: 'badge-gray', label: 'Deactivated' };
 
   return (
     <div className="space-y-6">
@@ -89,20 +88,23 @@ export default function AdminMembers() {
                   <td className="px-4 py-3 text-gray-600">{m.email}</td>
                   <td className="px-4 py-3 text-gray-500">{m.department || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={statusColors[m.account_status] || 'badge-gray'}>{m.account_status}</span>
+                    {(() => {
+                      const { className, label } = statusBadge(m.is_active);
+                      return <span className={className}>{label}</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      {m.account_status === 'Active' && (
+                      {m.is_active && (
                         <button
-                          onClick={() => handleAction(m.member_id, 'suspend')}
+                          onClick={() => handleAction(m.member_id, 'deactivate')}
                           disabled={actionId === m.member_id}
                           className="btn-secondary btn-sm text-xs"
                         >
-                          Suspend
+                          Deactivate
                         </button>
                       )}
-                      {m.account_status === 'Suspended' && (
+                      {!m.is_active && (
                         <button
                           onClick={() => handleAction(m.member_id, 'activate')}
                           disabled={actionId === m.member_id}
@@ -111,15 +113,13 @@ export default function AdminMembers() {
                           Activate
                         </button>
                       )}
-                      {m.account_status !== 'Deleted' && (
-                        <button
-                          onClick={() => handleAction(m.member_id, 'delete')}
-                          disabled={actionId === m.member_id}
-                          className="btn-danger btn-sm text-xs"
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleAction(m.member_id, 'delete')}
+                        disabled={actionId === m.member_id}
+                        className="btn-danger btn-sm text-xs"
+                      >
+                        Remove
+                      </button>
                     </div>
                   </td>
                 </tr>

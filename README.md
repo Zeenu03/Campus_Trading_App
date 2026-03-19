@@ -45,6 +45,20 @@ Default credentials created:
 
 > **Important:** Change the password before deploying.
 
+### 1c. Sample member accounts (optional)
+
+Five registered students with **no listings** (same pattern as `/auth/register`):
+
+```bash
+cd Assignment2Final/backend
+go run ./cmd/seedmembers
+```
+
+Emails: `sample.user1@iitgn.ac.in` … `sample.user5@iitgn.ac.in`  
+Password (all five): `Sample@iitgn25`  
+
+Re-running skips any email that already exists.
+
 ---
 
 ## 2. Environment Variables

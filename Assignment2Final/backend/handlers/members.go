@@ -30,7 +30,7 @@ func ListMembers(w http.ResponseWriter, r *http.Request) {
 	offset, totalPages := paginate(page, pageSize, total)
 
 	query := `SELECT m.MemberID, m.user_id, m.Name, u.email, m.ContactNumber,
-               m.Department, m.YearOfStudy, m.Hostel, m.RoomNumber, m.AccountStatus
+               m.Department, m.YearOfStudy, m.Hostel, m.RoomNumber, u.is_active
               FROM Member m JOIN sys_user u ON u.user_id = m.user_id WHERE 1=1`
 	if search != "" {
 		query += " AND (m.Name LIKE ? OR u.email LIKE ?)"
@@ -51,7 +51,7 @@ func ListMembers(w http.ResponseWriter, r *http.Request) {
 		var dept, hostel *string
 		var yr *int
 		if err := rows.Scan(&m.MemberID, &m.UserID, &m.Name, &m.Email, &m.ContactNumber,
-			&dept, &yr, &hostel, &m.RoomNumber, &m.AccountStatus); err != nil {
+			&dept, &yr, &hostel, &m.RoomNumber, &m.IsActive); err != nil {
 			continue
 		}
 		members = append(members, map[string]interface{}{
@@ -63,7 +63,7 @@ func ListMembers(w http.ResponseWriter, r *http.Request) {
 			"department":     dept,
 			"year_of_study":  yr,
 			"hostel":         hostel,
-			"account_status": m.AccountStatus,
+			"is_active":      m.IsActive,
 		})
 	}
 	if members == nil {
@@ -101,12 +101,12 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 	err = appdb.DB.QueryRowContext(ctx,
 		`SELECT m.MemberID, m.user_id, m.Name, u.email, m.ContactNumber,
              m.Department, m.YearOfStudy, m.Hostel, m.RoomNumber, m.Bio, m.Image,
-             m.IsVerified, m.AccountStatus, m.AccountCreationDate
+             m.IsVerified, u.is_active, m.AccountCreationDate
           FROM Member m JOIN sys_user u ON u.user_id = m.user_id
           WHERE m.MemberID = ?`, memberID,
 	).Scan(&m.MemberID, &m.UserID, &m.Name, &email, &m.ContactNumber,
 		&dept, &yr, &hostel, &room, &bio, &img,
-		&m.IsVerified, &m.AccountStatus, &m.AccountCreationDate)
+		&m.IsVerified, &m.IsActive, &m.AccountCreationDate)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "member not found")
 		return
@@ -254,9 +254,9 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 			"room_number":    room,
 			"bio":            bio,
 			"image":          img,
-			"is_verified":    m.IsVerified,
-			"account_status": m.AccountStatus,
-			"created_date":   m.AccountCreationDate,
+			"is_verified": m.IsVerified,
+			"is_active":   m.IsActive,
+			"created_date": m.AccountCreationDate,
 		},
 		"listings":      listings,
 		"transactions":  transactions,
@@ -286,6 +286,43 @@ func UpdateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// sys_user.is_active — admin only (deactivate / reactivate)
+	updatedActive := false
+	if raw, ok := body["is_active"]; ok {
+		if !mw.HasRole(ctx, "admin") {
+			mw.RespondForbidden(w)
+			return
+		}
+		active, ok := raw.(bool)
+		if !ok {
+			respondError(w, http.StatusBadRequest, "is_active must be a boolean")
+			return
+		}
+		var targetUserID int
+		err = appdb.DB.QueryRowContext(ctx,
+			`SELECT user_id FROM Member WHERE MemberID = ?`, memberID).Scan(&targetUserID)
+		if err == sql.ErrNoRows {
+			respondError(w, http.StatusNotFound, "member not found")
+			return
+		}
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "lookup failed")
+			return
+		}
+		_, err = appdb.DB.ExecContext(ctx,
+			`UPDATE sys_user SET is_active = ? WHERE user_id = ?`, active, targetUserID)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "update failed")
+			return
+		}
+		if !active {
+			_, _ = appdb.DB.ExecContext(ctx,
+				`UPDATE sys_session SET is_revoked = TRUE WHERE user_id = ?`, targetUserID)
+		}
+		updatedActive = true
+		delete(body, "is_active")
+	}
+
 	// Build SET clause dynamically
 	var setClauses []string
 	var args []interface{}
@@ -311,11 +348,14 @@ func UpdateMember(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if len(setClauses) == 0 {
+	if len(setClauses) == 0 && !updatedActive {
 		respondError(w, http.StatusBadRequest, "no valid fields to update")
 		return
 	}
-	setClauses = append(setClauses, "LastModifiedDate = NOW()")
+	if len(setClauses) == 0 {
+		respondJSON(w, http.StatusOK, map[string]string{"message": "updated"})
+		return
+	}
 	args = append(args, memberID)
 
 	_, err = appdb.DB.ExecContext(ctx,
@@ -356,8 +396,7 @@ func DeleteMember(w http.ResponseWriter, r *http.Request) {
 	sessionID := mw.GetSessionID(ctx)
 	_ = mw.SetSessionVars(tx, sessionID, mw.GetUserID(ctx))
 
-	// Soft delete: set AccountStatus, deactivate sys_user, revoke sessions, withdraw listings, expire offers
-	_, _ = tx.ExecContext(ctx, `UPDATE Member SET AccountStatus = 'Deleted' WHERE MemberID = ?`, memberID)
+	// Soft delete: deactivate sys_user, revoke sessions, withdraw listings, expire offers
 	_, _ = tx.ExecContext(ctx, `UPDATE sys_user SET is_active = FALSE WHERE user_id = ?`, userID)
 	_, _ = tx.ExecContext(ctx, `UPDATE sys_session SET is_revoked = TRUE WHERE user_id = ?`, userID)
 	_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Withdrawn' WHERE SellerID = ? AND Status = 'Listed'`, memberID)
