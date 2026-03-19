@@ -10,7 +10,7 @@ A complete Flask web application with RESTful APIs, JWT authentication, RBAC, au
 
 ```bash
 # 1. Install Python dependencies
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 # 2. Configure environment
 cp .env.example .env
@@ -34,11 +34,14 @@ python3 run.py
 ```
 
 **Default login credentials (after step 5):**
-| Username | Password | Role |
-|----------|----------|------|
-| admin | admin123 | Admin |
-| amal.perera | password123 | RegularUser |
+
+
+| Username        | Password    | Role        |
+| --------------- | ----------- | ----------- |
+| admin           | admin123    | Admin       |
+| amal.perera     | password123 | RegularUser |
 | nimali.fernando | password123 | RegularUser |
+
 
 > ⚠️ **Why one script?** `User` has foreign keys to `Member` and `Administrator`.
 > Running `01_create_auth_tables.sql` alone fails because those tables don't exist yet.
@@ -102,29 +105,31 @@ Module_B/
 
 ## API Reference
 
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/api/login` | POST | ❌ | Authenticate user |
-| `/api/logout` | POST | ✅ | Revoke session |
-| `/api/isAuth` | GET | ✅ | Check session validity |
-| `/api/register` | POST | ❌ | Register new user |
-| `/api/members` | GET/POST | ✅ | List / create members |
-| `/api/members/<id>` | GET/PUT/DELETE | ✅ | Get / update / delete member |
-| `/api/members/<id>/portfolio` | GET | ✅ | View member portfolio |
-| `/api/listings` | GET/POST | ✅ | Browse / create listings |
-| `/api/listings/<id>` | GET/PUT/DELETE | ✅ | Get / update / delete listing |
-| `/api/offers` | GET/POST | ✅ | List / make offers |
-| `/api/offers/<id>/accept` | PUT | ✅ | Accept offer (seller) |
-| `/api/offers/<id>/decline` | PUT | ✅ | Decline offer (seller) |
-| `/api/offers/<id>/withdraw` | PUT | ✅ | Withdraw offer (buyer) |
-| `/api/transactions` | GET | ✅ | View transactions |
-| `/api/transactions/<id>/confirm` | PUT | ✅ | Confirm transaction |
-| `/api/transactions/<id>/rate` | POST | ✅ | Rate after completion |
-| `/api/categories` | GET | ✅ | List categories |
-| `/api/admin/stats` | GET | 🔑 Admin | Platform stats |
-| `/api/admin/users` | GET/PUT/DELETE | 🔑 Admin | Manage users |
-| `/api/admin/reports` | GET/PUT | 🔑 Admin | Manage reports |
-| `/api/admin/audit-logs` | GET | 🔑 Admin | View audit trail |
+
+| Endpoint                         | Method         | Auth     | Description                   |
+| -------------------------------- | -------------- | -------- | ----------------------------- |
+| `/api/login`                     | POST           | ❌        | Authenticate user             |
+| `/api/logout`                    | POST           | ✅        | Revoke session                |
+| `/api/isAuth`                    | GET            | ✅        | Check session validity        |
+| `/api/register`                  | POST           | ❌        | Register new user             |
+| `/api/members`                   | GET/POST       | ✅        | List / create members         |
+| `/api/members/<id>`              | GET/PUT/DELETE | ✅        | Get / update / delete member  |
+| `/api/members/<id>/portfolio`    | GET            | ✅        | View member portfolio         |
+| `/api/listings`                  | GET/POST       | ✅        | Browse / create listings      |
+| `/api/listings/<id>`             | GET/PUT/DELETE | ✅        | Get / update / delete listing |
+| `/api/offers`                    | GET/POST       | ✅        | List / make offers            |
+| `/api/offers/<id>/accept`        | PUT            | ✅        | Accept offer (seller)         |
+| `/api/offers/<id>/decline`       | PUT            | ✅        | Decline offer (seller)        |
+| `/api/offers/<id>/withdraw`      | PUT            | ✅        | Withdraw offer (buyer)        |
+| `/api/transactions`              | GET            | ✅        | View transactions             |
+| `/api/transactions/<id>/confirm` | PUT            | ✅        | Confirm transaction           |
+| `/api/transactions/<id>/rate`    | POST           | ✅        | Rate after completion         |
+| `/api/categories`                | GET            | ✅        | List categories               |
+| `/api/admin/stats`               | GET            | 🔑 Admin | Platform stats                |
+| `/api/admin/users`               | GET/PUT/DELETE | 🔑 Admin | Manage users                  |
+| `/api/admin/reports`             | GET/PUT        | 🔑 Admin | Manage reports                |
+| `/api/admin/audit-logs`          | GET            | 🔑 Admin | View audit trail              |
+
 
 ---
 
@@ -135,6 +140,7 @@ python3 benchmarks/run_benchmark.py
 ```
 
 This will:
+
 1. Drop all indexes (`05_drop_indexes.sql`)
 2. Run 8 test queries × 10 iterations each → record times
 3. Apply indexes (`03_create_indexes.sql`)
@@ -161,31 +167,35 @@ python -m pytest tests/test_api.py -v
 
 ## Web UI Pages
 
-| URL | Page |
-|-----|------|
-| `/login` | Sign-in page |
-| `/dashboard` | Home with stats & recent listings |
-| `/listings` | Browse all listings with filters |
-| `/listings/<id>` | Listing detail + make offer |
-| `/listings/create` | Post a new listing |
-| `/members` | Member directory |
-| `/members/<id>/portfolio` | Member profile & stats |
-| `/admin` | Admin panel (users, reports, audit log) |
+
+| URL                       | Page                                    |
+| ------------------------- | --------------------------------------- |
+| `/login`                  | Sign-in page                            |
+| `/dashboard`              | Home with stats & recent listings       |
+| `/listings`               | Browse all listings with filters        |
+| `/listings/<id>`          | Listing detail + make offer             |
+| `/listings/create`        | Post a new listing                      |
+| `/members`                | Member directory                        |
+| `/members/<id>/portfolio` | Member profile & stats                  |
+| `/admin`                  | Admin panel (users, reports, audit log) |
+
 
 ---
 
 ## Phase Completion
 
-| Phase | Status | Notes |
-|-------|--------|-------|
-| Phase 1: Foundation | ✅ Complete | Project structure, config, SQL |
-| Phase 2: Models | ✅ Complete | All 14+ SQLAlchemy models |
-| Phase 3: Auth | ✅ Complete | JWT + bcrypt + session tracking |
-| Phase 4: RBAC | ✅ Complete | Decorators + audit logging |
+
+| Phase               | Status     | Notes                                          |
+| ------------------- | ---------- | ---------------------------------------------- |
+| Phase 1: Foundation | ✅ Complete | Project structure, config, SQL                 |
+| Phase 2: Models     | ✅ Complete | All 14+ SQLAlchemy models                      |
+| Phase 3: Auth       | ✅ Complete | JWT + bcrypt + session tracking                |
+| Phase 4: RBAC       | ✅ Complete | Decorators + audit logging                     |
 | Phase 5: API Routes | ✅ Complete | Members, Listings, Offers, Transactions, Admin |
-| Phase 6: Web UI | ✅ Complete | Bootstrap 5 templates for all pages |
-| Phase 7: Benchmarks | ✅ Complete | Benchmark script + EXPLAIN analysis |
-| Phase 8: Report | ✅ Complete | report.docx with full documentation |
+| Phase 6: Web UI     | ✅ Complete | Bootstrap 5 templates for all pages            |
+| Phase 7: Benchmarks | ✅ Complete | Benchmark script + EXPLAIN analysis            |
+| Phase 8: Report     | ✅ Complete | report.docx with full documentation            |
+
 
 ---
 
@@ -213,3 +223,4 @@ mysql -u root -p CampusTrading < sql/04_seed_data.sql
 
 > `01_create_auth_tables.sql` was updated to add the `User→Member` and `User→Administrator`
 > foreign keys via `ALTER TABLE` at the **end** of the file, so it is safe to run after `02_campus_trading.sql`.
+
