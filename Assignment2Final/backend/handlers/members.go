@@ -400,7 +400,7 @@ func DeleteMember(w http.ResponseWriter, r *http.Request) {
 	_, _ = tx.ExecContext(ctx, `UPDATE sys_user SET is_active = FALSE WHERE user_id = ?`, userID)
 	_, _ = tx.ExecContext(ctx, `UPDATE sys_session SET is_revoked = TRUE WHERE user_id = ?`, userID)
 	_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Withdrawn' WHERE SellerID = ? AND Status = 'Listed'`, memberID)
-	_, _ = tx.ExecContext(ctx, `UPDATE Offer SET OfferStatus = 'Expired' WHERE BuyerID = ? AND OfferStatus = 'Submitted'`, memberID)
+	_, _ = tx.ExecContext(ctx, `UPDATE Offer SET OfferStatus = 'Withdrawn', ResponseDate = NOW() WHERE BuyerID = ? AND OfferStatus = 'Submitted'`, memberID)
 
 	if err := tx.Commit(); err != nil {
 		respondError(w, http.StatusInternalServerError, "commit failed")

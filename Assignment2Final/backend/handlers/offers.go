@@ -27,12 +27,12 @@ func GetMyOffer(w http.ResponseWriter, r *http.Request) {
 	var o models.Offer
 	err = appdb.DB.QueryRowContext(ctx,
 		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.AgreedPrice,
-             o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate, o.ExpiryDate
+             o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate
           FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID
           WHERE o.ListingID = ? AND o.BuyerID = ?`, listingID, memberID,
 	).Scan(&o.OfferID, &o.ListingID, &o.BuyerID, &o.BuyerName,
 		&o.OfferedPrice, &o.AgreedPrice, &o.OfferStatus, &o.Reason,
-		&o.SubmittedDate, &o.ResponseDate, &o.ExpiryDate)
+		&o.SubmittedDate, &o.ResponseDate)
 	if err == sql.ErrNoRows {
 		respondJSON(w, http.StatusOK, nil)
 		return
@@ -68,7 +68,7 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := appdb.DB.QueryContext(ctx,
 		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.AgreedPrice,
-             o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate, o.ExpiryDate
+             o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate
           FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID
           WHERE o.ListingID = ? ORDER BY o.SubmittedDate DESC`, listingID)
 	if err != nil {
@@ -82,7 +82,7 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 		var o models.Offer
 		_ = rows.Scan(&o.OfferID, &o.ListingID, &o.BuyerID, &o.BuyerName,
 			&o.OfferedPrice, &o.AgreedPrice, &o.OfferStatus, &o.Reason,
-			&o.SubmittedDate, &o.ResponseDate, &o.ExpiryDate)
+			&o.SubmittedDate, &o.ResponseDate)
 		offers = append(offers, o)
 	}
 	if offers == nil {
@@ -126,7 +126,6 @@ func CreateOffer(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		OfferedPrice float64 `json:"offered_price"`
-		ExpiryDate   *string `json:"expiry_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid body")
@@ -146,11 +145,11 @@ func CreateOffer(w http.ResponseWriter, r *http.Request) {
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Offer (ListingID, BuyerID, OfferedPrice, ExpiryDate)
-         VALUES (?, ?, ?, ?)
+		`INSERT INTO Offer (ListingID, BuyerID, OfferedPrice)
+         VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE OfferedPrice = VALUES(OfferedPrice), OfferStatus = 'Submitted',
-             Reason = NULL, ResponseDate = NULL, ExpiryDate = VALUES(ExpiryDate)`,
-		listingID, memberID, body.OfferedPrice, body.ExpiryDate,
+             Reason = NULL, ResponseDate = NULL`,
+		listingID, memberID, body.OfferedPrice,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "offer creation failed")
@@ -248,6 +247,9 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = tx.ExecContext(ctx,
 		`UPDATE Listing SET Status = 'Sold', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
+
+	_, _ = tx.ExecContext(ctx,
+		`DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
@@ -526,6 +528,9 @@ func BuyerAcceptOffer(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = tx.ExecContext(ctx,
 		`UPDATE Listing SET Status = 'Sold', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
+
+	_, _ = tx.ExecContext(ctx,
+		`DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)

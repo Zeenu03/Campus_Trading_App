@@ -13,7 +13,7 @@ const fmtPrice = (p) =>
   p != null ? `₹${Number(p).toLocaleString()}` : '—';
 
 const STATUS_COLORS = {
-  Listed: 'badge-green', Sold: 'badge-gray', Expired: 'badge-gray', Withdrawn: 'badge-gray',
+  Listed: 'badge-green', Sold: 'badge-gray', Withdrawn: 'badge-gray',
 };
 
 const OFFER_STATUS_COLORS = {
@@ -21,7 +21,6 @@ const OFFER_STATUS_COLORS = {
   Accepted:  'text-green-700 bg-green-50',
   Declined:  'text-red-700 bg-red-50',
   Withdrawn: 'text-red-700 bg-red-50',
-  Expired:   'text-gray-600 bg-gray-100',
 };
 
 // ── ReasonModal ────────────────────────────────────────────────
@@ -456,9 +455,6 @@ export default function ListingDetail() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Category:</span> <span className="font-medium">{listing.category_name}</span></div>
               <div><span className="text-gray-500">Condition:</span> <span className="font-medium">{listing.condition || 'N/A'}</span></div>
-              {listing.expiry_date && (
-                <div><span className="text-gray-500">Expires:</span> <span className="font-medium">{new Date(listing.expiry_date).toLocaleDateString()}</span></div>
-              )}
               <div><span className="text-gray-500">Listed:</span> <span className="font-medium">{new Date(listing.created_date).toLocaleDateString()}</span></div>
               <div>
                 <span className="text-gray-500">Interested:</span>{' '}
@@ -652,11 +648,6 @@ export default function ListingDetail() {
             </div>
           )}
 
-          {listing.status !== 'Listed' && !isOwn && (
-            <div className="card text-center text-gray-500 text-sm">
-              <p>This listing is no longer accepting offers.</p>
-            </div>
-          )}
         </div>
       </div>
 

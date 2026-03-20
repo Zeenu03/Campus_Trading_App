@@ -89,7 +89,6 @@ type Listing struct {
 	Status                  string     `json:"status"`
 	CreatedDate             time.Time  `json:"created_date"`
 	LastModifiedDate        *time.Time `json:"last_modified_date"`
-	ExpiryDate              *time.Time `json:"expiry_date"`
 	IsDonation              bool       `json:"is_donation"`
 	WishRequestID           *int       `json:"wish_request_id"`
 	Images                  []ListingImage `json:"images,omitempty"`
@@ -116,7 +115,6 @@ type Offer struct {
 	Reason        *string    `json:"reason"`
 	SubmittedDate time.Time  `json:"submitted_date"`
 	ResponseDate  *time.Time `json:"response_date"`
-	ExpiryDate    *time.Time `json:"expiry_date"`
 }
 
 type Transaction struct {

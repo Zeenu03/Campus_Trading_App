@@ -23,7 +23,7 @@ import (
 
 var (
 	allowedListingStatuses = map[string]struct{}{
-		"Listed": {}, "Sold": {}, "Expired": {}, "Withdrawn": {},
+		"Listed": {}, "Sold": {}, "Withdrawn": {},
 	}
 	allowedListingConditions = map[string]struct{}{
 		"New": {}, "Like New": {}, "Good": {}, "Fair": {}, "Poor": {},
@@ -76,7 +76,7 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 
 	query := `SELECT l.ListingID, l.SellerID, m.Name, l.CategoryID, c.CategoryName,
                l.Title, l.AskingPrice, l.IsNegotiable, l.Condition, l.Status,
-               l.CreatedDate, l.ExpiryDate, l.IsDonation
+               l.CreatedDate, l.IsDonation
               FROM Listing l
               JOIN Member m ON m.MemberID = l.SellerID
               JOIN Category c ON c.CategoryID = l.CategoryID` +
@@ -94,14 +94,12 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l models.Listing
 		var cond *string
-		var expiry *time.Time
 		if err := rows.Scan(&l.ListingID, &l.SellerID, &l.SellerName, &l.CategoryID, &l.CategoryName,
 			&l.Title, &l.AskingPrice, &l.IsNegotiable, &cond, &l.Status,
-			&l.CreatedDate, &expiry, &l.IsDonation); err != nil {
+			&l.CreatedDate, &l.IsDonation); err != nil {
 			continue
 		}
 		l.Condition = cond
-		l.ExpiryDate = expiry
 		listings = append(listings, l)
 	}
 	if listings == nil {
@@ -128,7 +126,6 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 		AskingPrice   float64 `json:"asking_price"`
 		IsNegotiable  bool    `json:"is_negotiable"`
 		Condition     *string `json:"condition"`
-		ExpiryDate    *string `json:"expiry_date"`
 		IsDonation    bool    `json:"is_donation"`
 		WishRequestID *int    `json:"wish_request_id"`
 	}
@@ -175,19 +172,11 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
-	var expiryVal interface{} = nil
-	if body.ExpiryDate != nil {
-		t, err := time.Parse("2006-01-02", *body.ExpiryDate)
-		if err == nil {
-			expiryVal = t
-		}
-	}
-
 	res, err := tx.ExecContext(ctx,
 		"INSERT INTO Listing (SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable, "+
-			"`Condition`, ExpiryDate, IsDonation, WishRequestID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"`Condition`, IsDonation, WishRequestID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		memberID, body.CategoryID, body.Title, body.Description, body.AskingPrice, body.IsNegotiable,
-		body.Condition, expiryVal, body.IsDonation, body.WishRequestID,
+		body.Condition, body.IsDonation, body.WishRequestID,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "listing creation failed: "+err.Error())
@@ -207,13 +196,13 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*models.Listing, error) {
 	var l models.Listing
 	var desc, cond *string
-	var lastMod, expiry *time.Time
+	var lastMod *time.Time
 	var wishReqID *int
 
 	err := appdb.DB.QueryRowContext(ctx,
 		`SELECT l.ListingID, l.SellerID, m.Name, l.CategoryID, c.CategoryName,
              l.Title, l.Description, l.AskingPrice, l.IsNegotiable, l.Condition,
-             l.Status, l.CreatedDate, l.LastModifiedDate, l.ExpiryDate,
+             l.Status, l.CreatedDate, l.LastModifiedDate,
              l.IsDonation, l.WishRequestID
           FROM Listing l
           JOIN Member m ON m.MemberID = l.SellerID
@@ -221,7 +210,7 @@ func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*m
           WHERE l.ListingID = ?`, listingID,
 	).Scan(&l.ListingID, &l.SellerID, &l.SellerName, &l.CategoryID, &l.CategoryName,
 		&l.Title, &desc, &l.AskingPrice, &l.IsNegotiable, &cond,
-		&l.Status, &l.CreatedDate, &lastMod, &expiry,
+		&l.Status, &l.CreatedDate, &lastMod,
 		&l.IsDonation, &wishReqID)
 	if err != nil {
 		return nil, err
@@ -229,7 +218,6 @@ func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*m
 	l.Description = desc
 	l.Condition = cond
 	l.LastModifiedDate = lastMod
-	l.ExpiryDate = expiry
 	l.WishRequestID = wishReqID
 
 	_ = appdb.DB.QueryRowContext(ctx,
@@ -497,22 +485,6 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 	var setClauses []string
 	var args []interface{}
 
-	if v, ok := body["expiry_date"]; ok {
-		if v == nil {
-			setClauses = append(setClauses, "ExpiryDate = NULL")
-		} else if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-			t, err := time.Parse("2006-01-02", strings.TrimSpace(s))
-			if err != nil {
-				respondError(w, http.StatusBadRequest, "invalid expiry_date")
-				return
-			}
-			setClauses = append(setClauses, "ExpiryDate = ?")
-			args = append(args, t)
-		} else {
-			setClauses = append(setClauses, "ExpiryDate = NULL")
-		}
-	}
-
 	colMap := map[string]string{
 		"title": "Title", "description": "Description", "asking_price": "AskingPrice",
 		"is_negotiable": "IsNegotiable", "condition": "`Condition`",
@@ -600,7 +572,7 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Withdrawn', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
-	_, _ = tx.ExecContext(ctx, `UPDATE Offer SET OfferStatus = 'Expired' WHERE ListingID = ? AND OfferStatus = 'Submitted'`, listingID)
+	_, _ = tx.ExecContext(ctx, `UPDATE Offer SET OfferStatus = 'Withdrawn', ResponseDate = NOW() WHERE ListingID = ? AND OfferStatus = 'Submitted'`, listingID)
 
 	if err := tx.Commit(); err != nil {
 		respondError(w, http.StatusInternalServerError, "commit failed")

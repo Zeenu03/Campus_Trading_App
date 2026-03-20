@@ -37,18 +37,12 @@ export function buildListingPayload(form) {
     is_negotiable: form.is_negotiable,
     condition: form.condition || null,
     category_id: parseInt(form.category_id, 10),
-    expiry_date: form.expiry_date || null,
     is_donation: form.is_donation,
   };
 }
 
 /** Shape listing API response into form state */
 export function listingToFormState(listing) {
-  let expiryDate = '';
-  if (listing.expiry_date) {
-    const s = String(listing.expiry_date);
-    expiryDate = s.length >= 10 ? s.slice(0, 10) : s;
-  }
   return {
     title: listing.title || '',
     description: listing.description ?? '',
@@ -56,7 +50,6 @@ export function listingToFormState(listing) {
     is_negotiable: Boolean(listing.is_negotiable),
     condition: listing.condition || 'Good',
     category_id: listing.category_id != null ? String(listing.category_id) : '',
-    expiry_date: expiryDate,
     is_donation: Boolean(listing.is_donation),
   };
 }
@@ -157,18 +150,6 @@ export default function ListingForm({
           step="0.01"
         />
         {errors.asking_price && <p className="text-xs text-red-600 mt-1">{errors.asking_price}</p>}
-      </div>
-
-      <div>
-        <label className="label">Listing Expiry Date</label>
-        <input
-          type="date"
-          name="expiry_date"
-          value={form.expiry_date}
-          onChange={onChange}
-          className="input max-w-xs"
-          min={new Date().toISOString().split('T')[0]}
-        />
       </div>
 
       <div className="flex items-center gap-2">

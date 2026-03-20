@@ -140,10 +140,11 @@ func ConfirmTransaction(w http.ResponseWriter, r *http.Request) {
 		_, _ = tx.ExecContext(ctx,
 			`UPDATE Transaction SET Status = 'Completed', TransactionDate = NOW() WHERE TransactionID = ?`, txID)
 
-		// Get listingID and update it
+		// Get listingID, mark sold, and clear watchlist
 		var listingID int
 		_ = tx.QueryRowContext(ctx, `SELECT ListingID FROM Transaction WHERE TransactionID = ?`, txID).Scan(&listingID)
 		_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Sold', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
+		_, _ = tx.ExecContext(ctx, `DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
 
 		// Notify both parties
 		_, _ = tx.ExecContext(ctx,

@@ -59,7 +59,7 @@ func Benchmark(w http.ResponseWriter, r *http.Request) {
 	}{
 		{
 			Name:  "Q1: Listed listings by date",
-			Query: "SELECT * FROM Listing WHERE Status='Listed' AND ExpiryDate > NOW() ORDER BY CreatedDate DESC LIMIT 20",
+			Query: "SELECT * FROM Listing WHERE Status='Listed' ORDER BY CreatedDate DESC LIMIT 20",
 		},
 		{
 			Name:  "Q2: Listings by SellerID",

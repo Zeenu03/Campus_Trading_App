@@ -282,7 +282,6 @@ CREATE TABLE Listing (
     Status VARCHAR(20) NOT NULL DEFAULT 'Listed',
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     LastModifiedDate DATETIME NULL,
-    ExpiryDate DATETIME NULL,
     IsDonation BOOLEAN NOT NULL DEFAULT FALSE,
     WishRequestID INT NULL,
     CONSTRAINT FK_Listing_Seller FOREIGN KEY (SellerID) REFERENCES Member (MemberID) ON UPDATE CASCADE,
@@ -292,7 +291,6 @@ CREATE TABLE Listing (
         Status IN (
             'Listed',
             'Sold',
-            'Expired',
             'Withdrawn'
         )
     ),
@@ -337,7 +335,6 @@ CREATE TABLE Offer (
     Reason VARCHAR(1000) NULL,
     SubmittedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ResponseDate DATETIME NULL,
-    ExpiryDate DATETIME NULL,
     CONSTRAINT FK_Offer_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID) ON UPDATE CASCADE,
     CONSTRAINT FK_Offer_Buyer FOREIGN KEY (BuyerID) REFERENCES Member (MemberID),
     CONSTRAINT CHK_Offer_Status CHECK (
@@ -345,8 +342,7 @@ CREATE TABLE Offer (
             'Submitted',
             'Accepted',
             'Declined',
-            'Withdrawn',
-            'Expired'
+            'Withdrawn'
         )
     ),
     CONSTRAINT CHK_Offer_Price CHECK (OfferedPrice > 0),
@@ -461,7 +457,6 @@ CREATE TABLE Notification (
             'OfferAccepted',
             'OfferDeclined',
             'OfferWithdrawn',
-            'OfferExpired',
             'PriceDropped',
             'StatusChanged',
             'MeetingReminder',
