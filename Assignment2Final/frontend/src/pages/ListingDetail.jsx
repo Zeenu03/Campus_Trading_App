@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, uploadsUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ImageManager from '../components/ImageManager';
 import ListingForm, { validateListingForm, buildListingPayload, listingToFormState } from '../components/ListingForm';
 import { normalizeListingPayload, isListingDetailShape } from '../utils/listingApi';
 import toast from 'react-hot-toast';
@@ -34,6 +35,21 @@ export default function ListingDetail() {
       .catch(() => navigate('/listings'))
       .finally(() => setLoading(false));
   }, [id, navigate]);
+
+  // New listing in the URL → start at first image
+  useEffect(() => {
+    setImgIndex(0);
+  }, [id]);
+
+  // After add/remove images, imgIndex can be >= images.length → clamp so main image stays valid
+  useEffect(() => {
+    if (!listing) return;
+    const n = (listing.images || []).length;
+    setImgIndex((i) => {
+      if (n === 0) return 0;
+      return Math.min(Math.max(0, i), n - 1);
+    });
+  }, [listing?.listing_id, listing?.images?.length]);
 
   if (loading) return <LoadingSpinner />;
   if (!listing)  return null;
@@ -147,7 +163,7 @@ export default function ListingDetail() {
               <div>
                 <div className="aspect-video bg-gray-100 flex items-center justify-center">
                   <img
-                    src={images[imgIndex]?.image_url}
+                    src={uploadsUrl(images[imgIndex]?.image_url)}
                     alt={listing.title}
                     className="max-h-full max-w-full object-contain"
                     onError={e => { e.target.src = 'https://via.placeholder.com/400x300?text=No+Image'; }}
@@ -158,16 +174,28 @@ export default function ListingDetail() {
                     {images.map((img, i) => (
                       <button key={img.image_id} onClick={() => setImgIndex(i)}
                         className={`w-14 h-14 rounded-lg overflow-hidden border-2 flex-shrink-0 ${i === imgIndex ? 'border-blue-500' : 'border-gray-200'}`}>
-                        <img src={img.image_url} alt="" className="w-full h-full object-cover"
+                        <img src={uploadsUrl(img.image_url)} alt="" className="w-full h-full object-cover"
                           onError={e => { e.target.src = 'https://via.placeholder.com/56?text=?'; }} />
                       </button>
                     ))}
                   </div>
                 )}
+                {isOwn && (
+                  <div className="p-3 border-t">
+                    <ImageManager listing={listing} onUpdate={setListing} />
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="aspect-video bg-gray-100 flex items-center justify-center text-gray-400">
-                <p>No images</p>
+              <div>
+                <div className="aspect-video bg-gray-100 flex items-center justify-center text-gray-400">
+                  <p>No images</p>
+                </div>
+                {isOwn && (
+                  <div className="p-3 border-t">
+                    <ImageManager listing={listing} onUpdate={setListing} />
+                  </div>
+                )}
               </div>
             )}
           </div>

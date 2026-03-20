@@ -5,7 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,6 +18,8 @@ import (
 	appdb "campus-trading/db"
 	mw "campus-trading/middleware"
 	"campus-trading/models"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -23,6 +30,11 @@ var (
 	allowedListingConditions = map[string]struct{}{
 		"New": {}, "Like New": {}, "Good": {}, "Fair": {}, "Poor": {},
 	}
+	allowedImageTypes = map[string]struct{}{
+		"image/jpeg": {}, "image/png": {}, "image/webp": {}, "image/gif": {},
+	}
+	maxImageSize        = int64(5 << 20) // 5MB
+	maxImagesPerListing = 10
 )
 
 func jsonNumToFloat(v interface{}) (float64, error) {
@@ -274,13 +286,26 @@ func loadListingWithImages(ctx context.Context, listingID int) (*models.Listing,
 	defer imgRows.Close()
 	for imgRows.Next() {
 		var img models.ListingImage
-		if err := imgRows.Scan(&img.ImageID, &img.ImageURL, &img.ImageOrder); err != nil {
+		var storedPath string
+		if err := imgRows.Scan(&img.ImageID, &storedPath, &img.ImageOrder); err != nil {
 			return nil, err
 		}
+		img.ImageURL = imagePathToURL(storedPath)
 		img.ListingID = listingID
 		l.Images = append(l.Images, img)
 	}
 	return &l, nil
+}
+
+// imagePathToURL converts stored filesystem path to URL path for frontend.
+func imagePathToURL(stored string) string {
+	if stored == "" {
+		return ""
+	}
+	if strings.HasPrefix(stored, "/uploads/") {
+		return stored
+	}
+	return "/uploads/" + strings.TrimPrefix(stored, "/")
 }
 
 // GET /api/v1/listings/:id — auth, detail
@@ -340,14 +365,14 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cur struct {
-		Title         string
-		Description   sql.NullString
-		AskingPrice   float64
-		IsNegotiable  bool
-		Condition     sql.NullString
-		CategoryID    int
-		IsDonation    bool
-		Status        string
+		Title        string
+		Description  sql.NullString
+		AskingPrice  float64
+		IsNegotiable bool
+		Condition    sql.NullString
+		CategoryID   int
+		IsDonation   bool
+		Status       string
 	}
 	err = appdb.DB.QueryRowContext(ctx,
 		"SELECT Title, Description, AskingPrice, IsNegotiable, `Condition`, CategoryID, IsDonation, Status "+
@@ -615,6 +640,195 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"message": "listing withdrawn"})
+}
+
+// POST /api/v1/listings/:id/images — own or admin, upload image (multipart)
+func AddListingImage(w http.ResponseWriter, r *http.Request) {
+	listingID, err := urlParamInt(r, "id")
+	fmt.Println(listingID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid listing id")
+		return
+	}
+	ctx := r.Context()
+
+	var sellerUserID int
+	err = appdb.DB.QueryRowContext(ctx,
+		`SELECT m.user_id FROM Listing l JOIN Member m ON m.MemberID = l.SellerID WHERE l.ListingID = ?`,
+		listingID).Scan(&sellerUserID)
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "listing not found")
+		return
+	}
+	fmt.Println(sellerUserID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
+		mw.RespondForbidden(w)
+		return
+	}
+
+	var imageCount int
+	_ = appdb.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM ListingImage WHERE ListingID = ?", listingID).Scan(&imageCount)
+	if imageCount >= maxImagesPerListing {
+		respondError(w, http.StatusBadRequest, "maximum 10 images per listing")
+		return
+	}
+
+	if err := r.ParseMultipartForm(maxImageSize + 1024); err != nil { // maxMemory for form fields
+		respondError(w, http.StatusBadRequest, "invalid multipart form or file too large")
+		return
+	}
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "image file required (field name: image)")
+		return
+	}
+	defer file.Close()
+
+	ct := header.Header.Get("Content-Type")
+	if _, ok := allowedImageTypes[ct]; !ok {
+		respondError(w, http.StatusBadRequest, "invalid image type; use JPEG, PNG, WebP, or GIF")
+		return
+	}
+	if header.Size > maxImageSize {
+		respondError(w, http.StatusBadRequest, "image too large (max 5MB)")
+		return
+	}
+
+	ext := ".jpg"
+	switch ct {
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	case "image/gif":
+		ext = ".gif"
+	}
+	baseDir := os.Getenv("UPLOADS_DIR")
+	if baseDir == "" {
+		baseDir = "./uploads"
+	}
+	relDir := filepath.Join("listings", strconv.Itoa(listingID))
+	absDir := filepath.Join(baseDir, relDir)
+	if err := os.MkdirAll(absDir, 0755); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to create upload directory")
+		return
+	}
+	filename := uuid.New().String() + ext
+	absPath := filepath.Join(absDir, filename)
+	dst, err := os.Create(absPath)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to save file")
+		return
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, file); err != nil {
+		os.Remove(absPath)
+		respondError(w, http.StatusInternalServerError, "failed to write file")
+		return
+	}
+	storedPath := filepath.Join(relDir, filename)
+	storedPath = filepath.ToSlash(storedPath)
+
+	var nextOrder int
+	_ = appdb.DB.QueryRowContext(ctx, "SELECT COALESCE(MAX(ImageOrder), 0) + 1 FROM ListingImage WHERE ListingID = ?", listingID).Scan(&nextOrder)
+
+	tx, err := appdb.DB.BeginTx(ctx, nil)
+	if err != nil {
+		os.Remove(absPath)
+		respondError(w, http.StatusInternalServerError, "tx failed")
+		return
+	}
+	defer tx.Rollback()
+	if err := mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx)); err != nil {
+		os.Remove(absPath)
+		respondError(w, http.StatusInternalServerError, "session vars failed")
+		return
+	}
+	res, err := tx.ExecContext(ctx,
+		"INSERT INTO ListingImage (ListingID, ImageURL, ImageOrder) VALUES (?, ?, ?)",
+		listingID, storedPath, nextOrder)
+	if err != nil {
+		os.Remove(absPath)
+		respondError(w, http.StatusInternalServerError, "insert failed: "+err.Error())
+		return
+	}
+	imgID, _ := res.LastInsertId()
+	if err := tx.Commit(); err != nil {
+		os.Remove(absPath)
+		respondError(w, http.StatusInternalServerError, "commit failed")
+		return
+	}
+	img := models.ListingImage{
+		ImageID:    int(imgID),
+		ListingID:  listingID,
+		ImageURL:   imagePathToURL(storedPath),
+		ImageOrder: nextOrder,
+	}
+	respondJSON(w, http.StatusCreated, img)
+}
+
+// DELETE /api/v1/listings/:id/images/:imageId — own or admin, remove image
+func DeleteListingImage(w http.ResponseWriter, r *http.Request) {
+	listingID, err := urlParamInt(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid listing id")
+		return
+	}
+	imageID, err := urlParamInt(r, "imageId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid image id")
+		return
+	}
+	ctx := r.Context()
+
+	var sellerUserID int
+	err = appdb.DB.QueryRowContext(ctx,
+		`SELECT m.user_id FROM Listing l JOIN Member m ON m.MemberID = l.SellerID WHERE l.ListingID = ?`,
+		listingID).Scan(&sellerUserID)
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "listing not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
+		mw.RespondForbidden(w)
+		return
+	}
+
+	var storedPath string
+	err = appdb.DB.QueryRowContext(ctx,
+		"SELECT ImageURL FROM ListingImage WHERE ImageID = ? AND ListingID = ?",
+		imageID, listingID).Scan(&storedPath)
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "image not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+
+	baseDir := os.Getenv("UPLOADS_DIR")
+	if baseDir == "" {
+		baseDir = "./uploads"
+	}
+	absPath := filepath.Join(baseDir, filepath.FromSlash(storedPath))
+	_ = os.Remove(absPath)
+
+	_, err = appdb.DB.ExecContext(ctx,
+		"DELETE FROM ListingImage WHERE ImageID = ? AND ListingID = ?", imageID, listingID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "delete failed")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "image removed"})
 }
 
 func join(s []string, sep string) string {

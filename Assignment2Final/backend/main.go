@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	appaudit "campus-trading/audit"
 	appdb "campus-trading/db"
@@ -47,6 +48,14 @@ func main() {
 	r.Use(corsMiddleware(frontendURL))
 	r.Use(mw.AuditMiddleware)
 
+	// Serve uploaded images (before /api to avoid conflict)
+	workDir, _ := os.Getwd()
+	uploadsDir := os.Getenv("UPLOADS_DIR")
+	if uploadsDir == "" {
+		uploadsDir = filepath.Join(workDir, "uploads")
+	}
+	r.Handle("/uploads/*", http.StripPrefix("/uploads", http.FileServer(http.Dir(uploadsDir))))
+
 	// ── Public routes ──────────────────────────────────────────
 	r.Route("/api/v1", func(r chi.Router) {
 
@@ -68,11 +77,13 @@ func main() {
 			r.Delete("/members/{id}", handlers.DeleteMember)        // admin
 
 			// Listings
-			r.Get("/listings", handlers.ListListings)          // auth
-			r.Post("/listings", handlers.CreateListing)        // member
-			r.Get("/listings/{id}", handlers.GetListing)       // auth
-			r.Put("/listings/{id}", handlers.UpdateListing)    // own|admin
-			r.Delete("/listings/{id}", handlers.DeleteListing) // own|admin
+			r.Get("/listings", handlers.ListListings)                    // auth
+			r.Post("/listings", handlers.CreateListing)                  // member
+			r.Get("/listings/{id}", handlers.GetListing)                 // auth
+			r.Put("/listings/{id}", handlers.UpdateListing)            // own|admin
+			r.Delete("/listings/{id}", handlers.DeleteListing)          // own|admin
+			r.Post("/listings/{id}/images", handlers.AddListingImage)   // own|admin
+			r.Delete("/listings/{id}/images/{imageId}", handlers.DeleteListingImage) // own|admin
 
 			// Offers
 			r.Get("/listings/{id}/offers", handlers.ListOffersForListing) // own-seller|admin
