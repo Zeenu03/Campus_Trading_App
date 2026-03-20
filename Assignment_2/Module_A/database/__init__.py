@@ -34,6 +34,8 @@ from .node import Node, LeafNode, InternalNode
 from .bplustree import BPlusTree
 from .bruteforce import BruteForceDB
 from .benchmark import PerformanceAnalyzer, run_quick_benchmark
+from .table import Table
+from .db_manager import DatabaseManager
 
 __all__ = [
     'Node',
@@ -42,7 +44,9 @@ __all__ = [
     'BPlusTree',
     'BruteForceDB',
     'PerformanceAnalyzer',
-    'run_quick_benchmark'
+    'run_quick_benchmark',
+    'Table',
+    'DatabaseManager'
 ]
 
 __version__ = '1.0.0'
