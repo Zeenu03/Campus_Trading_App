@@ -93,6 +93,8 @@ type Listing struct {
 	IsDonation              bool       `json:"is_donation"`
 	WishRequestID           *int       `json:"wish_request_id"`
 	Images                  []ListingImage `json:"images,omitempty"`
+	WatcherCount            int        `json:"watcher_count"`
+	MyWatchlistID           *int       `json:"my_watchlist_id"` // non-nil when the requesting member is watching
 }
 
 type ListingImage struct {
@@ -110,7 +112,6 @@ type Offer struct {
 	BuyerName    string     `json:"buyer_name,omitempty"` // joined
 	OfferedPrice float64    `json:"offered_price"`
 	AgreedPrice  *float64   `json:"agreed_price"`
-	OfferMessage *string    `json:"offer_message"`
 	OfferStatus  string     `json:"offer_status"`
 	SubmittedDate time.Time `json:"submitted_date"`
 	ResponseDate *time.Time `json:"response_date"`

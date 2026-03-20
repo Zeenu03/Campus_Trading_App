@@ -15,13 +15,14 @@ export default function ListingDetail() {
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [imgIndex, setImgIndex] = useState(0);
-  const [offerForm, setOfferForm] = useState({ offered_price: '', offer_message: '' });
+  const [offerForm, setOfferForm] = useState({ offered_price: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [editErrors, setEditErrors] = useState({});
   const [editLoading, setEditLoading] = useState(false);
+  const [watchLoading, setWatchLoading] = useState(false);
 
   useEffect(() => {
     api.get(`/listings/${id}`)
@@ -57,8 +58,7 @@ export default function ListingDetail() {
   const isOwn = String(user?.member_id) === String(listing.seller_id);
   const images   = listing.images || [];
   const statusColors = {
-    Listed: 'badge-green', Pending: 'badge-yellow', Reserved: 'badge-blue',
-    Sold: 'badge-gray', Withdrawn: 'badge-gray',
+    Listed: 'badge-green', Sold: 'badge-gray', Expired: 'badge-gray', Withdrawn: 'badge-gray',
   };
 
   const handleOffer = async (e) => {
@@ -72,10 +72,9 @@ export default function ListingDetail() {
     try {
       await api.post(`/listings/${id}/offers`, {
         offered_price: parseFloat(offerForm.offered_price),
-        offer_message: offerForm.offer_message || null,
       });
       toast.success('Offer submitted!');
-      setOfferForm({ offered_price: '', offer_message: '' });
+      setOfferForm({ offered_price: '' });
       const updated = await api.get(`/listings/${id}`);
       if (isListingDetailShape(updated)) setListing(normalizeListingPayload(updated));
     } catch (err) {
@@ -96,12 +95,23 @@ export default function ListingDetail() {
     }
   };
 
-  const handleWatch = async () => {
+  const handleWatchToggle = async () => {
+    if (watchLoading) return;
+    setWatchLoading(true);
     try {
-      await api.post('/watchlist', { listing_id: listing.listing_id });
-      toast.success('Added to watchlist');
+      if (listing.my_watchlist_id != null) {
+        await api.delete(`/watchlist/listing/${listing.listing_id}`);
+        setListing((l) => ({ ...l, my_watchlist_id: null, watcher_count: Math.max(0, l.watcher_count - 1) }));
+        toast.success('Removed from watchlist');
+      } else {
+        const res = await api.post('/watchlist', { listing_id: listing.listing_id });
+        setListing((l) => ({ ...l, my_watchlist_id: res.watchlist_id, watcher_count: l.watcher_count + 1 }));
+        toast.success('Added to watchlist');
+      }
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setWatchLoading(false);
     }
   };
 
@@ -223,6 +233,12 @@ export default function ListingDetail() {
               <div><span className="text-gray-500">Condition:</span> <span className="font-medium">{listing.condition || 'N/A'}</span></div>
               {listing.expiry_date && <div><span className="text-gray-500">Expires:</span> <span className="font-medium">{new Date(listing.expiry_date).toLocaleDateString()}</span></div>}
               <div><span className="text-gray-500">Listed:</span> <span className="font-medium">{new Date(listing.created_date).toLocaleDateString()}</span></div>
+              <div>
+                <span className="text-gray-500">Interested:</span>{' '}
+                <span className="font-medium">
+                  {listing.watcher_count} {listing.watcher_count === 1 ? 'person' : 'people'}
+                </span>
+              </div>
             </div>
 
             {listing.description && (
@@ -276,21 +292,20 @@ export default function ListingDetail() {
                     onChange={e => setOfferForm(f => ({ ...f, offered_price: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <label className="label text-xs">Message (optional)</label>
-                  <textarea
-                    className="input text-sm resize-none" rows={2}
-                    placeholder="Any message for the seller…"
-                    value={offerForm.offer_message}
-                    onChange={e => setOfferForm(f => ({ ...f, offer_message: e.target.value }))}
-                  />
-                </div>
                 <button type="submit" className="btn-primary w-full text-sm" disabled={submitting}>
                   {submitting ? 'Submitting…' : 'Submit Offer'}
                 </button>
               </form>
-              <button onClick={handleWatch} className="btn-secondary w-full text-sm">
-                👁 Watch Listing
+              <button
+                onClick={handleWatchToggle}
+                disabled={watchLoading}
+                className={`w-full text-sm ${listing.my_watchlist_id != null ? 'btn-danger' : 'btn-secondary'}`}
+              >
+                {watchLoading
+                  ? (listing.my_watchlist_id != null ? 'Removing…' : 'Adding…')
+                  : listing.my_watchlist_id != null
+                    ? '✕ Remove from Watchlist'
+                    : '+ Add to Watchlist'}
               </button>
             </div>
           )}

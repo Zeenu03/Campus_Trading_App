@@ -291,9 +291,6 @@ CREATE TABLE Listing (
     CONSTRAINT CHK_Listing_Status CHECK (
         Status IN (
             'Listed',
-            'Pending',
-            'Reserved',
-            'Completed',
             'Sold',
             'Expired',
             'Withdrawn'
@@ -336,7 +333,6 @@ CREATE TABLE Offer (
     BuyerID INT NOT NULL,
     OfferedPrice DECIMAL(10, 2) NOT NULL,
     AgreedPrice DECIMAL(10, 2) NULL,
-    OfferMessage VARCHAR(500) NULL,
     OfferStatus VARCHAR(20) NOT NULL DEFAULT 'Submitted',
     SubmittedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ResponseDate DATETIME NULL,

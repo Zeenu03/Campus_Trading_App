@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,8 +23,7 @@ import (
 
 var (
 	allowedListingStatuses = map[string]struct{}{
-		"Listed": {}, "Pending": {}, "Reserved": {}, "Completed": {},
-		"Sold": {}, "Expired": {}, "Withdrawn": {},
+		"Listed": {}, "Sold": {}, "Expired": {}, "Withdrawn": {},
 	}
 	allowedListingConditions = map[string]struct{}{
 		"New": {}, "Like New": {}, "Good": {}, "Fair": {}, "Poor": {},
@@ -36,51 +34,6 @@ var (
 	maxImageSize        = int64(5 << 20) // 5MB
 	maxImagesPerListing = 10
 )
-
-func jsonNumToFloat(v interface{}) (float64, error) {
-	switch x := v.(type) {
-	case float64:
-		return x, nil
-	case int:
-		return float64(x), nil
-	case int64:
-		return float64(x), nil
-	case json.Number:
-		return x.Float64()
-	default:
-		return 0, errors.New("expected number")
-	}
-}
-
-func jsonNumToInt(v interface{}) (int, error) {
-	switch x := v.(type) {
-	case float64:
-		return int(x), nil
-	case int:
-		return x, nil
-	case int64:
-		return int(x), nil
-	case json.Number:
-		i64, err := x.Int64()
-		if err != nil {
-			return 0, err
-		}
-		return int(i64), nil
-	default:
-		return 0, errors.New("expected integer")
-	}
-}
-
-func jsonToBool(v interface{}) (bool, error) {
-	switch x := v.(type) {
-	case bool:
-		return x, nil
-	case float64:
-		return x != 0, nil
-	default:
-		return false, errors.New("expected boolean")
-	}
-}
 
 // GET /api/v1/listings — auth, browse with filters
 func ListListings(w http.ResponseWriter, r *http.Request) {
@@ -249,8 +202,9 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, map[string]interface{}{"listing_id": listingID, "message": "listing created"})
 }
 
-// loadListingWithImages returns listing row with seller/category names and images (same shape as GET detail).
-func loadListingWithImages(ctx context.Context, listingID int) (*models.Listing, error) {
+// loadListingWithImages returns listing row with seller/category names, images, watcher count,
+// and (when memberID > 0) the requesting member's own watchlist entry ID for this listing.
+func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*models.Listing, error) {
 	var l models.Listing
 	var desc, cond *string
 	var lastMod, expiry *time.Time
@@ -277,6 +231,19 @@ func loadListingWithImages(ctx context.Context, listingID int) (*models.Listing,
 	l.LastModifiedDate = lastMod
 	l.ExpiryDate = expiry
 	l.WishRequestID = wishReqID
+
+	_ = appdb.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM Watchlist WHERE ListingID = ?`, listingID).Scan(&l.WatcherCount)
+
+	if memberID > 0 {
+		var wid int
+		err2 := appdb.DB.QueryRowContext(ctx,
+			`SELECT WatchlistID FROM Watchlist WHERE ListingID = ? AND MemberID = ?`,
+			listingID, memberID).Scan(&wid)
+		if err2 == nil {
+			l.MyWatchlistID = &wid
+		}
+	}
 
 	imgRows, err := appdb.DB.QueryContext(ctx,
 		`SELECT ImageID, ImageURL, ImageOrder FROM ListingImage WHERE ListingID = ? ORDER BY ImageOrder`, listingID)
@@ -316,7 +283,7 @@ func GetListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	l, err := loadListingWithImages(r.Context(), listingID)
+	l, err := loadListingWithImages(r.Context(), listingID, mw.GetMemberID(r.Context()))
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "listing not found")
 		return
@@ -587,7 +554,7 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	l, err := loadListingWithImages(ctx, listingID)
+	l, err := loadListingWithImages(ctx, listingID, mw.GetMemberID(ctx))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to load listing after update")
 		return

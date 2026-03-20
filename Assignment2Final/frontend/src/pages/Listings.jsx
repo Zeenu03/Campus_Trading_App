@@ -6,12 +6,11 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Pagination from '../components/Pagination';
 
 const CONDITIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
-const STATUSES   = ['Listed', 'Pending', 'Reserved'];
+const STATUSES   = ['Listed', 'Sold', 'Expired', 'Withdrawn'];
 
 function ListingCard({ listing }) {
   const statusColors = {
-    Listed: 'badge-green', Pending: 'badge-yellow',
-    Reserved: 'badge-blue', Sold: 'badge-gray',
+    Listed: 'badge-green', Sold: 'badge-gray', Expired: 'badge-gray', Withdrawn: 'badge-gray',
   };
   return (
     <Link to={`/listings/${listing.listing_id}`}

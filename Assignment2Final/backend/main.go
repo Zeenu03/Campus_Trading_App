@@ -103,9 +103,10 @@ func main() {
 			r.Put("/wishrequests/{id}", handlers.UpdateWishRequest) // own
 
 			// Watchlist
-			r.Get("/watchlist", handlers.GetWatchlist)                // member
-			r.Post("/watchlist", handlers.AddToWatchlist)             // member
-			r.Delete("/watchlist/{id}", handlers.RemoveFromWatchlist) // own
+			r.Get("/watchlist", handlers.GetWatchlist)                                   // member
+			r.Post("/watchlist", handlers.AddToWatchlist)                                // member
+			r.Delete("/watchlist/listing/{listingId}", handlers.RemoveFromWatchlistByListing) // member (by listing)
+			r.Delete("/watchlist/{id}", handlers.RemoveFromWatchlist)                    // own (by watchlist id)
 
 			// Notifications
 			r.Get("/notifications", handlers.ListNotifications)              // member

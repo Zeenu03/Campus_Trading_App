@@ -35,7 +35,7 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := appdb.DB.QueryContext(ctx,
 		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.AgreedPrice,
-             o.OfferMessage, o.OfferStatus, o.SubmittedDate, o.ResponseDate, o.ExpiryDate
+             o.OfferStatus, o.SubmittedDate, o.ResponseDate, o.ExpiryDate
           FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID
           WHERE o.ListingID = ? ORDER BY o.SubmittedDate DESC`, listingID)
 	if err != nil {
@@ -48,7 +48,7 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o models.Offer
 		_ = rows.Scan(&o.OfferID, &o.ListingID, &o.BuyerID, &o.BuyerName,
-			&o.OfferedPrice, &o.AgreedPrice, &o.OfferMessage, &o.OfferStatus,
+			&o.OfferedPrice, &o.AgreedPrice, &o.OfferStatus,
 			&o.SubmittedDate, &o.ResponseDate, &o.ExpiryDate)
 		offers = append(offers, o)
 	}
@@ -93,7 +93,6 @@ func CreateOffer(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		OfferedPrice float64  `json:"offered_price"`
-		OfferMessage *string  `json:"offer_message"`
 		ExpiryDate   *string  `json:"expiry_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -114,18 +113,15 @@ func CreateOffer(w http.ResponseWriter, r *http.Request) {
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Offer (ListingID, BuyerID, OfferedPrice, OfferMessage, ExpiryDate)
-         VALUES (?, ?, ?, ?, ?)`,
-		listingID, memberID, body.OfferedPrice, body.OfferMessage, body.ExpiryDate,
+		`INSERT INTO Offer (ListingID, BuyerID, OfferedPrice, ExpiryDate)
+         VALUES (?, ?, ?, ?)`,
+		listingID, memberID, body.OfferedPrice, body.ExpiryDate,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "offer creation failed")
 		return
 	}
 	offerID, _ := res.LastInsertId()
-
-	// Update listing status to Pending
-	_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Pending' WHERE ListingID = ? AND Status = 'Listed'`, listingID)
 
 	// Notify seller
 	_, _ = tx.ExecContext(ctx,
@@ -189,9 +185,9 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
          WHERE ListingID = ? AND OfferStatus = 'Submitted' AND OfferID != ?`,
 		listingID, offerID)
 
-	// Update listing status to Reserved
+	// Mark listing Sold — offer accepted, sale agreed
 	_, _ = tx.ExecContext(ctx,
-		`UPDATE Listing SET Status = 'Reserved', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
+		`UPDATE Listing SET Status = 'Sold', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
 
 	// Create transaction record
 	res, err := tx.ExecContext(ctx,
@@ -252,15 +248,6 @@ func DeclineOffer(w http.ResponseWriter, r *http.Request) {
 	_, _ = tx.ExecContext(ctx,
 		`UPDATE Offer SET OfferStatus = 'Declined', ResponseDate = NOW() WHERE OfferID = ?`, offerID)
 
-	// Check if any other submitted offers; if not, set listing back to Listed
-	var otherOffers int
-	_ = tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM Offer WHERE ListingID = ? AND OfferStatus = 'Submitted'`, listingID,
-	).Scan(&otherOffers)
-	if otherOffers == 0 {
-		_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Listed' WHERE ListingID = ?`, listingID)
-	}
-
 	// Notify buyer
 	_, _ = tx.ExecContext(ctx,
 		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID)
@@ -280,10 +267,10 @@ func WithdrawOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	var buyerUserID, listingID int
+	var buyerUserID int
 	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT m.user_id, o.ListingID FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID WHERE o.OfferID = ?`,
-		offerID).Scan(&buyerUserID, &listingID)
+		`SELECT m.user_id FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID WHERE o.OfferID = ?`,
+		offerID).Scan(&buyerUserID)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "offer not found")
 		return
@@ -304,14 +291,6 @@ func WithdrawOffer(w http.ResponseWriter, r *http.Request) {
 	_, _ = tx.ExecContext(ctx,
 		`UPDATE Offer SET OfferStatus = 'Withdrawn', ResponseDate = NOW() WHERE OfferID = ? AND OfferStatus = 'Submitted'`,
 		offerID)
-
-	var otherOffers int
-	_ = tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM Offer WHERE ListingID = ? AND OfferStatus = 'Submitted'`, listingID,
-	).Scan(&otherOffers)
-	if otherOffers == 0 {
-		_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Listed' WHERE ListingID = ?`, listingID)
-	}
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusOK, map[string]string{"message": "offer withdrawn"})

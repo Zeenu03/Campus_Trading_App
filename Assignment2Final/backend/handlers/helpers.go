@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -44,4 +45,49 @@ func paginate(page, pageSize, total int) (offset int, totalPages int) {
 	offset = (page - 1) * pageSize
 	totalPages = (total + pageSize - 1) / pageSize
 	return
+}
+
+func jsonNumToFloat(v interface{}) (float64, error) {
+	switch x := v.(type) {
+	case float64:
+		return x, nil
+	case int:
+		return float64(x), nil
+	case int64:
+		return float64(x), nil
+	case json.Number:
+		return x.Float64()
+	default:
+		return 0, errors.New("expected number")
+	}
+}
+
+func jsonNumToInt(v interface{}) (int, error) {
+	switch x := v.(type) {
+	case float64:
+		return int(x), nil
+	case int:
+		return x, nil
+	case int64:
+		return int(x), nil
+	case json.Number:
+		i64, err := x.Int64()
+		if err != nil {
+			return 0, err
+		}
+		return int(i64), nil
+	default:
+		return 0, errors.New("expected integer")
+	}
+}
+
+func jsonToBool(v interface{}) (bool, error) {
+	switch x := v.(type) {
+	case bool:
+		return x, nil
+	case float64:
+		return x != 0, nil
+	default:
+		return false, errors.New("expected boolean")
+	}
 }

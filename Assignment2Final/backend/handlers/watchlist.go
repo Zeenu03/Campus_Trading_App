@@ -107,6 +107,45 @@ func AddToWatchlist(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, map[string]interface{}{"watchlist_id": wid, "message": "added to watchlist"})
 }
 
+// DELETE /api/v1/watchlist/listing/:listingId — member, remove current user's watch by listing ID
+func RemoveFromWatchlistByListing(w http.ResponseWriter, r *http.Request) {
+	listingID, err := urlParamInt(r, "listingId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid listing id")
+		return
+	}
+	ctx := r.Context()
+	memberID := mw.GetMemberID(ctx)
+	if memberID == 0 {
+		respondError(w, http.StatusForbidden, "member only")
+		return
+	}
+
+	var watchlistID int
+	err = appdb.DB.QueryRowContext(ctx,
+		`SELECT WatchlistID FROM Watchlist WHERE ListingID = ? AND MemberID = ?`,
+		listingID, memberID).Scan(&watchlistID)
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "not watching this listing")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+
+	tx, err := appdb.DB.BeginTx(ctx, nil)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "tx failed")
+		return
+	}
+	defer tx.Rollback()
+	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
+	_, _ = tx.ExecContext(ctx, `DELETE FROM Watchlist WHERE WatchlistID = ?`, watchlistID)
+	_ = tx.Commit()
+	respondJSON(w, http.StatusOK, map[string]string{"message": "removed from watchlist"})
+}
+
 // DELETE /api/v1/watchlist/:id — own
 func RemoveFromWatchlist(w http.ResponseWriter, r *http.Request) {
 	watchlistID, err := urlParamInt(r, "id")
