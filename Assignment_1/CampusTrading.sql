@@ -122,13 +122,11 @@ CREATE TABLE Listing (
     AskingPrice              DECIMAL(10,2)   NOT NULL,
     IsNegotiable             BOOLEAN         NOT NULL DEFAULT TRUE,
     `Condition`              VARCHAR(20)     NULL,
-    CourseCode               VARCHAR(20)     NULL,
     Status                   VARCHAR(20)     NOT NULL DEFAULT 'Listed',
     CreatedDate              DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     LastModifiedDate         DATETIME        NULL,
     ExpiryDate               DATETIME        NULL,
     IsDonation               BOOLEAN         NOT NULL DEFAULT FALSE,
-    PreferredMeetingLocation VARCHAR(200)    NULL,
     WishRequestID            INT             NULL,
 
     CONSTRAINT FK_Listing_Seller FOREIGN KEY (SellerID)
@@ -525,28 +523,28 @@ VALUES
 -- --------------------------------------------------------
 -- Listings (20 rows)
 -- --------------------------------------------------------
-INSERT INTO Listing (ListingID, SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable, `Condition`, CourseCode, Status, CreatedDate, LastModifiedDate, ExpiryDate, IsDonation, PreferredMeetingLocation, WishRequestID)
+INSERT INTO Listing (ListingID, SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable, `Condition`, Status, CreatedDate, LastModifiedDate, ExpiryDate, IsDonation, WishRequestID)
 VALUES
-(1,  1,  6,  'Engineering Mechanics by Meriam 8th Ed',   'Slightly highlighted, covers intact',                      35.00, 1, 'Good',     'ME-201',  'Listed',    '2026-01-05', NULL,          '2026-02-04', 0, 'Engineering lobby',     NULL),
-(2,  3,  8,  'Dell Laptop 15.6" i5 8GB RAM',             'Used for 2 years, battery lasts 4hrs, charger included',  450.00, 1, 'Good',     NULL,       'Listed',    '2026-01-08', NULL,          '2026-02-07', 0, 'Library entrance',      NULL),
-(3,  5,  11, 'Wooden study desk with drawer',             'Solid wood, minor scratches on surface',                  60.00, 1, 'Fair',     NULL,       'Sold',      '2025-12-15', '2026-01-10', '2026-01-14', 0, 'Hostel A ground floor', NULL),
-(4,  7,  10, 'Casio fx-991EX Scientific Calculator',      'Barely used, all functions working',                      18.00, 0, 'Like New', NULL,       'Listed',    '2026-01-12', NULL,          '2026-02-11', 0, 'Canteen',               NULL),
-(5,  7,  12, 'LED Desk Lamp with USB port',               'Adjustable brightness, 3 color modes',                   12.00, 1, 'Good',     NULL,       'Completed', '2025-11-20', '2025-12-15', '2025-12-20', 0, 'Hostel D entrance',     4),
-(6,  2,  9,  'Samsung Galaxy A54 phone case',             'Transparent silicone, never used',                         5.00, 0, 'New',      NULL,       'Listed',    '2026-01-18', NULL,          '2026-02-17', 0, 'Hostel B common room',  NULL),
-(7,  10, 6,  'Fluid Mechanics by Cengel 4th Ed',         'Some notes in margins, all pages intact',                  22.00, 1, 'Fair',     'ME-301',  'Listed',    '2026-01-20', NULL,          '2026-02-19', 0, 'Engineering lobby',     NULL),
-(8,  12, 2,  'Arduino Uno R3 with starter kit',           'Complete kit with sensors, LEDs, breadboard',             30.00, 1, 'Like New', 'EE-205',  'Pending',   '2026-01-22', '2026-02-01', '2026-02-21', 0, 'Hostel C lab area',     NULL),
-(9,  18, 8,  'HP Monitor 24" Full HD IPS',                'Perfect condition, comes with HDMI cable',               120.00, 1, 'Like New', NULL,       'Listed',    '2026-01-25', NULL,          '2026-02-24', 0, 'Hostel B parking lot',  NULL),
-(10, 13, 13, 'Set of dumbbells 3kg and 5kg',              'Rubber coated, no damage',                                25.00, 1, 'Good',     NULL,       'Listed',    '2026-01-28', NULL,          '2026-02-27', 0, 'Hostel A gym area',     NULL),
-(11, 15, 14, 'Yonex Nanoray badminton racket',            'Used for one semester, grip replaced',                    15.00, 1, 'Good',     NULL,       'Listed',    '2026-01-30', NULL,          '2026-03-01', 0, 'Sports complex',        NULL),
-(12, 1,  7,  'Physics by Halliday Resnick 11th Ed',      'Clean copy, no markings',                                  28.00, 1, 'Like New', 'PH-101',  'Listed',    '2026-02-01', NULL,          '2026-03-03', 0, 'Library entrance',      NULL),
-(13, 5,  15, 'Old curtains set - FREE',                   'Blue curtains, fits standard hostel windows',              0.00, 0, 'Fair',     NULL,       'Listed',    '2026-02-02', NULL,          '2026-03-04', 1, 'Hostel A ground floor', NULL),
-(14, 18, 5,  'Formal shirt white size M',                 'Worn twice for presentations',                            10.00, 0, 'Like New', NULL,       'Listed',    '2026-02-03', NULL,          '2026-03-05', 0, 'Hostel B common room',  NULL),
-(15, 9,  11, 'Foldable study chair',                      'Metal frame, cushioned seat, easy to fold',               35.00, 1, 'Good',     NULL,       'Reserved',  '2026-02-04', '2026-02-08', '2026-03-06', 0, 'Hostel A ground floor', NULL),
-(16, 20, 2,  'Raspberry Pi 4 Model B 4GB',                'With case and power supply',                              40.00, 1, 'Good',     'CS-310',  'Listed',    '2026-02-05', NULL,          '2026-03-07', 0, 'Engineering lobby',     NULL),
-(17, 3,  6,  'Structural Analysis by Hibbeler 10th Ed',  'Cover slightly worn, content perfect',                     20.00, 1, 'Fair',     'CE-301',  'Sold',      '2025-12-01', '2025-12-20', '2025-12-31', 0, 'Library entrance',      NULL),
-(18, 7,  15, 'Assorted stationery set - FREE',           'Pens, rulers, geometry set',                                0.00, 0, 'Good',     NULL,       'Listed',    '2026-02-06', NULL,          '2026-03-08', 1, 'Hostel D entrance',     NULL),
-(19, 6,  8,  'Logitech wireless mouse',                   'Bluetooth, USB receiver included, 1 year old',            8.00,  1, 'Good',     NULL,       'Completed', '2025-11-10', '2025-12-01', '2025-12-10', 0, 'Hostel B common room',  NULL),
-(20, 12, 10, 'TI-84 Plus CE graphing calculator',        'Color screen, updated OS, with charging cable',           55.00,  1, 'Like New', NULL,       'Listed',    '2026-02-08', NULL,          '2026-03-10', 0, 'Hostel C lab area',     NULL);
+(1,  1,  6,  'Engineering Mechanics by Meriam 8th Ed',   'Slightly highlighted, covers intact',                      35.00, 1, 'Good',     'Listed',    '2026-01-05', NULL,          '2026-02-04', 0, NULL),
+(2,  3,  8,  'Dell Laptop 15.6" i5 8GB RAM',             'Used for 2 years, battery lasts 4hrs, charger included',  450.00, 1, 'Good',     'Listed',    '2026-01-08', NULL,          '2026-02-07', 0, NULL),
+(3,  5,  11, 'Wooden study desk with drawer',             'Solid wood, minor scratches on surface',                  60.00, 1, 'Fair',     'Sold',      '2025-12-15', '2026-01-10', '2026-01-14', 0, NULL),
+(4,  7,  10, 'Casio fx-991EX Scientific Calculator',      'Barely used, all functions working',                      18.00, 0, 'Like New', 'Listed',    '2026-01-12', NULL,          '2026-02-11', 0, NULL),
+(5,  7,  12, 'LED Desk Lamp with USB port',               'Adjustable brightness, 3 color modes',                   12.00, 1, 'Good',     'Completed', '2025-11-20', '2025-12-15', '2025-12-20', 0, 4),
+(6,  2,  9,  'Samsung Galaxy A54 phone case',             'Transparent silicone, never used',                         5.00, 0, 'New',      'Listed',    '2026-01-18', NULL,          '2026-02-17', 0, NULL),
+(7,  10, 6,  'Fluid Mechanics by Cengel 4th Ed',         'Some notes in margins, all pages intact',                  22.00, 1, 'Fair',     'Listed',    '2026-01-20', NULL,          '2026-02-19', 0, NULL),
+(8,  12, 2,  'Arduino Uno R3 with starter kit',           'Complete kit with sensors, LEDs, breadboard',             30.00, 1, 'Like New', 'Pending',   '2026-01-22', '2026-02-01', '2026-02-21', 0, NULL),
+(9,  18, 8,  'HP Monitor 24" Full HD IPS',                'Perfect condition, comes with HDMI cable',               120.00, 1, 'Like New', 'Listed',    '2026-01-25', NULL,          '2026-02-24', 0, NULL),
+(10, 13, 13, 'Set of dumbbells 3kg and 5kg',              'Rubber coated, no damage',                                25.00, 1, 'Good',     'Listed',    '2026-01-28', NULL,          '2026-02-27', 0, NULL),
+(11, 15, 14, 'Yonex Nanoray badminton racket',            'Used for one semester, grip replaced',                    15.00, 1, 'Good',     'Listed',    '2026-01-30', NULL,          '2026-03-01', 0, NULL),
+(12, 1,  7,  'Physics by Halliday Resnick 11th Ed',      'Clean copy, no markings',                                  28.00, 1, 'Like New', 'Listed',    '2026-02-01', NULL,          '2026-03-03', 0, NULL),
+(13, 5,  15, 'Old curtains set - FREE',                   'Blue curtains, fits standard hostel windows',              0.00, 0, 'Fair',     'Listed',    '2026-02-02', NULL,          '2026-03-04', 1, NULL),
+(14, 18, 5,  'Formal shirt white size M',                 'Worn twice for presentations',                            10.00, 0, 'Like New', 'Listed',    '2026-02-03', NULL,          '2026-03-05', 0, NULL),
+(15, 9,  11, 'Foldable study chair',                      'Metal frame, cushioned seat, easy to fold',               35.00, 1, 'Good',     'Reserved',  '2026-02-04', '2026-02-08', '2026-03-06', 0, NULL),
+(16, 20, 2,  'Raspberry Pi 4 Model B 4GB',                'With case and power supply',                              40.00, 1, 'Good',     'Listed',    '2026-02-05', NULL,          '2026-03-07', 0, NULL),
+(17, 3,  6,  'Structural Analysis by Hibbeler 10th Ed',  'Cover slightly worn, content perfect',                     20.00, 1, 'Fair',     'Sold',      '2025-12-01', '2025-12-20', '2025-12-31', 0, NULL),
+(18, 7,  15, 'Assorted stationery set - FREE',           'Pens, rulers, geometry set',                                0.00, 0, 'Good',     'Listed',    '2026-02-06', NULL,          '2026-03-08', 1, NULL),
+(19, 6,  8,  'Logitech wireless mouse',                   'Bluetooth, USB receiver included, 1 year old',            8.00,  1, 'Good',     'Completed', '2025-11-10', '2025-12-01', '2025-12-10', 0, NULL),
+(20, 12, 10, 'TI-84 Plus CE graphing calculator',        'Color screen, updated OS, with charging cable',           55.00,  1, 'Like New', 'Listed',    '2026-02-08', NULL,          '2026-03-10', 0, NULL);
 
 -- --------------------------------------------------------
 -- ListingImages (20 rows)

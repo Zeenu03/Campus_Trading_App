@@ -86,13 +86,11 @@ type Listing struct {
 	AskingPrice             float64    `json:"asking_price"`
 	IsNegotiable            bool       `json:"is_negotiable"`
 	Condition               *string    `json:"condition"`
-	CourseCode              *string    `json:"course_code"`
 	Status                  string     `json:"status"`
 	CreatedDate             time.Time  `json:"created_date"`
 	LastModifiedDate        *time.Time `json:"last_modified_date"`
 	ExpiryDate              *time.Time `json:"expiry_date"`
 	IsDonation              bool       `json:"is_donation"`
-	PreferredMeetingLocation *string   `json:"preferred_meeting_location"`
 	WishRequestID           *int       `json:"wish_request_id"`
 	Images                  []ListingImage `json:"images,omitempty"`
 }

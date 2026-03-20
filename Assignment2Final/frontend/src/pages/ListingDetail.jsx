@@ -3,6 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ListingForm, { validateListingForm, buildListingPayload, listingToFormState } from '../components/ListingForm';
+import { normalizeListingPayload, isListingDetailShape } from '../utils/listingApi';
 import toast from 'react-hot-toast';
 
 export default function ListingDetail() {
@@ -15,10 +17,20 @@ export default function ListingDetail() {
   const [offerForm, setOfferForm] = useState({ offered_price: '', offer_message: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [editErrors, setEditErrors] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     api.get(`/listings/${id}`)
-      .then(setListing)
+      .then((data) => {
+        if (!isListingDetailShape(data)) {
+          navigate('/listings');
+          return;
+        }
+        setListing(normalizeListingPayload(data));
+      })
       .catch(() => navigate('/listings'))
       .finally(() => setLoading(false));
   }, [id, navigate]);
@@ -26,7 +38,7 @@ export default function ListingDetail() {
   if (loading) return <LoadingSpinner />;
   if (!listing)  return null;
 
-  const isOwn    = user?.member_id === listing.seller_id;
+  const isOwn = String(user?.member_id) === String(listing.seller_id);
   const images   = listing.images || [];
   const statusColors = {
     Listed: 'badge-green', Pending: 'badge-yellow', Reserved: 'badge-blue',
@@ -49,7 +61,7 @@ export default function ListingDetail() {
       toast.success('Offer submitted!');
       setOfferForm({ offered_price: '', offer_message: '' });
       const updated = await api.get(`/listings/${id}`);
-      setListing(updated);
+      if (isListingDetailShape(updated)) setListing(normalizeListingPayload(updated));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -74,6 +86,47 @@ export default function ListingDetail() {
       toast.success('Added to watchlist');
     } catch (err) {
       toast.error(err.message);
+    }
+  };
+
+  const openEditModal = () => {
+    setEditForm(listingToFormState(listing));
+    setEditErrors({});
+    setEditOpen(true);
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setEditForm((f) => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    setEditErrors((err) => ({ ...err, [name]: undefined }));
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    const errs = validateListingForm(editForm);
+    if (Object.keys(errs).length) {
+      setEditErrors(errs);
+      return;
+    }
+    setEditLoading(true);
+    try {
+      const raw = await api.put(`/listings/${id}`, buildListingPayload(editForm));
+      let next = isListingDetailShape(raw) ? normalizeListingPayload(raw) : null;
+      if (!next) {
+        const fresh = await api.get(`/listings/${id}`);
+        if (!isListingDetailShape(fresh)) {
+          toast.error('Could not load listing after update');
+          return;
+        }
+        next = normalizeListingPayload(fresh);
+      }
+      setListing(next);
+      setEditOpen(false);
+      toast.success('Listing updated');
+    } catch (err) {
+      toast.error(err.message || 'Update failed');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -128,7 +181,9 @@ export default function ListingDetail() {
 
             <div className="flex items-center gap-4">
               <span className="text-3xl font-bold text-blue-700">
-                {listing.is_donation ? 'FREE' : `₹${Number(listing.asking_price).toLocaleString()}`}
+                {listing.is_donation
+                  ? 'FREE'
+                  : `₹${(Number.isFinite(Number(listing.asking_price)) ? Number(listing.asking_price) : 0).toLocaleString()}`}
               </span>
               {listing.is_negotiable && !listing.is_donation && (
                 <span className="badge-yellow">Negotiable</span>
@@ -138,8 +193,6 @@ export default function ListingDetail() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Category:</span> <span className="font-medium">{listing.category_name}</span></div>
               <div><span className="text-gray-500">Condition:</span> <span className="font-medium">{listing.condition || 'N/A'}</span></div>
-              {listing.course_code && <div><span className="text-gray-500">Course:</span> <span className="font-medium">{listing.course_code}</span></div>}
-              {listing.preferred_meeting_location && <div><span className="text-gray-500">Meet at:</span> <span className="font-medium">{listing.preferred_meeting_location}</span></div>}
               {listing.expiry_date && <div><span className="text-gray-500">Expires:</span> <span className="font-medium">{new Date(listing.expiry_date).toLocaleDateString()}</span></div>}
               <div><span className="text-gray-500">Listed:</span> <span className="font-medium">{new Date(listing.created_date).toLocaleDateString()}</span></div>
             </div>
@@ -153,8 +206,10 @@ export default function ListingDetail() {
 
             {isOwn && (
               <div className="flex gap-3 pt-2 border-t">
-                <Link to={`/listings/${id}/edit`} className="btn-secondary btn-sm text-sm">Edit</Link>
-                <button onClick={handleDelete} className="btn-danger btn-sm text-sm">Withdraw</button>
+                <button type="button" onClick={openEditModal} className="btn-secondary btn-sm text-sm">
+                  Edit
+                </button>
+                <button type="button" onClick={handleDelete} className="btn-danger btn-sm text-sm">Withdraw</button>
               </div>
             )}
           </div>
@@ -219,6 +274,37 @@ export default function ListingDetail() {
           )}
         </div>
       </div>
+
+      {editOpen && editForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-listing-title"
+          onClick={() => !editLoading && setEditOpen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="edit-listing-title" className="text-xl font-bold text-gray-900 mb-4">
+              Edit listing
+            </h2>
+            <ListingForm
+              idPrefix="edit-"
+              form={editForm}
+              errors={editErrors}
+              onChange={handleEditChange}
+              onSubmit={handleEditSubmit}
+              loading={editLoading}
+              submitLabel="Save changes"
+              pendingLabel="Saving…"
+              onCancel={() => !editLoading && setEditOpen(false)}
+              cancelLabel="Cancel"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

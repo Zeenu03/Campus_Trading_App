@@ -1,15 +1,74 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	appdb "campus-trading/db"
 	mw "campus-trading/middleware"
 	"campus-trading/models"
 )
+
+var (
+	allowedListingStatuses = map[string]struct{}{
+		"Listed": {}, "Pending": {}, "Reserved": {}, "Completed": {},
+		"Sold": {}, "Expired": {}, "Withdrawn": {},
+	}
+	allowedListingConditions = map[string]struct{}{
+		"New": {}, "Like New": {}, "Good": {}, "Fair": {}, "Poor": {},
+	}
+)
+
+func jsonNumToFloat(v interface{}) (float64, error) {
+	switch x := v.(type) {
+	case float64:
+		return x, nil
+	case int:
+		return float64(x), nil
+	case int64:
+		return float64(x), nil
+	case json.Number:
+		return x.Float64()
+	default:
+		return 0, errors.New("expected number")
+	}
+}
+
+func jsonNumToInt(v interface{}) (int, error) {
+	switch x := v.(type) {
+	case float64:
+		return int(x), nil
+	case int:
+		return x, nil
+	case int64:
+		return int(x), nil
+	case json.Number:
+		i64, err := x.Int64()
+		if err != nil {
+			return 0, err
+		}
+		return int(i64), nil
+	default:
+		return 0, errors.New("expected integer")
+	}
+}
+
+func jsonToBool(v interface{}) (bool, error) {
+	switch x := v.(type) {
+	case bool:
+		return x, nil
+	case float64:
+		return x != 0, nil
+	default:
+		return false, errors.New("expected boolean")
+	}
+}
 
 // GET /api/v1/listings — auth, browse with filters
 func ListListings(w http.ResponseWriter, r *http.Request) {
@@ -98,17 +157,15 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		CategoryID               int      `json:"category_id"`
-		Title                    string   `json:"title"`
-		Description              *string  `json:"description"`
-		AskingPrice              float64  `json:"asking_price"`
-		IsNegotiable             bool     `json:"is_negotiable"`
-		Condition                *string  `json:"condition"`
-		CourseCode               *string  `json:"course_code"`
-		ExpiryDate               *string  `json:"expiry_date"`
-		IsDonation               bool     `json:"is_donation"`
-		PreferredMeetingLocation *string  `json:"preferred_meeting_location"`
-		WishRequestID            *int     `json:"wish_request_id"`
+		CategoryID    int     `json:"category_id"`
+		Title         string  `json:"title"`
+		Description   *string `json:"description"`
+		AskingPrice   float64 `json:"asking_price"`
+		IsNegotiable  bool    `json:"is_negotiable"`
+		Condition     *string `json:"condition"`
+		ExpiryDate    *string `json:"expiry_date"`
+		IsDonation    bool    `json:"is_donation"`
+		WishRequestID *int    `json:"wish_request_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid body")
@@ -162,12 +219,10 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Listing (SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable,
-          Condition, CourseCode, ExpiryDate, IsDonation, PreferredMeetingLocation, WishRequestID)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"INSERT INTO Listing (SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable, "+
+			"`Condition`, ExpiryDate, IsDonation, WishRequestID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		memberID, body.CategoryID, body.Title, body.Description, body.AskingPrice, body.IsNegotiable,
-		body.Condition, body.CourseCode, expiryVal, body.IsDonation,
-		body.PreferredMeetingLocation, body.WishRequestID,
+		body.Condition, expiryVal, body.IsDonation, body.WishRequestID,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "listing creation failed: "+err.Error())
@@ -182,6 +237,52 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, map[string]interface{}{"listing_id": listingID, "message": "listing created"})
 }
 
+// loadListingWithImages returns listing row with seller/category names and images (same shape as GET detail).
+func loadListingWithImages(ctx context.Context, listingID int) (*models.Listing, error) {
+	var l models.Listing
+	var desc, cond *string
+	var lastMod, expiry *time.Time
+	var wishReqID *int
+
+	err := appdb.DB.QueryRowContext(ctx,
+		`SELECT l.ListingID, l.SellerID, m.Name, l.CategoryID, c.CategoryName,
+             l.Title, l.Description, l.AskingPrice, l.IsNegotiable, l.Condition,
+             l.Status, l.CreatedDate, l.LastModifiedDate, l.ExpiryDate,
+             l.IsDonation, l.WishRequestID
+          FROM Listing l
+          JOIN Member m ON m.MemberID = l.SellerID
+          JOIN Category c ON c.CategoryID = l.CategoryID
+          WHERE l.ListingID = ?`, listingID,
+	).Scan(&l.ListingID, &l.SellerID, &l.SellerName, &l.CategoryID, &l.CategoryName,
+		&l.Title, &desc, &l.AskingPrice, &l.IsNegotiable, &cond,
+		&l.Status, &l.CreatedDate, &lastMod, &expiry,
+		&l.IsDonation, &wishReqID)
+	if err != nil {
+		return nil, err
+	}
+	l.Description = desc
+	l.Condition = cond
+	l.LastModifiedDate = lastMod
+	l.ExpiryDate = expiry
+	l.WishRequestID = wishReqID
+
+	imgRows, err := appdb.DB.QueryContext(ctx,
+		`SELECT ImageID, ImageURL, ImageOrder FROM ListingImage WHERE ListingID = ? ORDER BY ImageOrder`, listingID)
+	if err != nil {
+		return nil, err
+	}
+	defer imgRows.Close()
+	for imgRows.Next() {
+		var img models.ListingImage
+		if err := imgRows.Scan(&img.ImageID, &img.ImageURL, &img.ImageOrder); err != nil {
+			return nil, err
+		}
+		img.ListingID = listingID
+		l.Images = append(l.Images, img)
+	}
+	return &l, nil
+}
+
 // GET /api/v1/listings/:id — auth, detail
 func GetListing(w http.ResponseWriter, r *http.Request) {
 	listingID, err := urlParamInt(r, "id")
@@ -190,25 +291,7 @@ func GetListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var l models.Listing
-	var desc, cond, courseCode, meetLoc *string
-	var lastMod, expiry *time.Time
-	var wishReqID *int
-
-	err = appdb.DB.QueryRowContext(r.Context(),
-		`SELECT l.ListingID, l.SellerID, m.Name, l.CategoryID, c.CategoryName,
-             l.Title, l.Description, l.AskingPrice, l.IsNegotiable, l.Condition,
-             l.CourseCode, l.Status, l.CreatedDate, l.LastModifiedDate, l.ExpiryDate,
-             l.IsDonation, l.PreferredMeetingLocation, l.WishRequestID
-          FROM Listing l
-          JOIN Member m ON m.MemberID = l.SellerID
-          JOIN Category c ON c.CategoryID = l.CategoryID
-          WHERE l.ListingID = ?`, listingID,
-	).Scan(&l.ListingID, &l.SellerID, &l.SellerName, &l.CategoryID, &l.CategoryName,
-		&l.Title, &desc, &l.AskingPrice, &l.IsNegotiable, &cond,
-		&courseCode, &l.Status, &l.CreatedDate, &lastMod, &expiry,
-		&l.IsDonation, &meetLoc, &wishReqID)
-
+	l, err := loadListingWithImages(r.Context(), listingID)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "listing not found")
 		return
@@ -217,31 +300,10 @@ func GetListing(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	l.Description = desc
-	l.Condition = cond
-	l.CourseCode = courseCode
-	l.LastModifiedDate = lastMod
-	l.ExpiryDate = expiry
-	l.PreferredMeetingLocation = meetLoc
-	l.WishRequestID = wishReqID
-
-	// Load images
-	imgRows, _ := appdb.DB.QueryContext(r.Context(),
-		`SELECT ImageID, ImageURL, ImageOrder FROM ListingImage WHERE ListingID = ? ORDER BY ImageOrder`, listingID)
-	if imgRows != nil {
-		defer imgRows.Close()
-		for imgRows.Next() {
-			var img models.ListingImage
-			_ = imgRows.Scan(&img.ImageID, &img.ImageURL, &img.ImageOrder)
-			img.ListingID = listingID
-			l.Images = append(l.Images, img)
-		}
-	}
-
 	respondJSON(w, http.StatusOK, l)
 }
 
-// PUT /api/v1/listings/:id — own or admin
+// PUT /api/v1/listings/:id — own or admin (partial update; merged with current row and validated)
 func UpdateListing(w http.ResponseWriter, r *http.Request) {
 	listingID, err := urlParamInt(r, "id")
 	if err != nil {
@@ -251,14 +313,16 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Check ownership
-	var sellerID int
 	var sellerUserID int
 	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT l.SellerID, m.user_id FROM Listing l JOIN Member m ON m.MemberID = l.SellerID WHERE l.ListingID = ?`,
-		listingID).Scan(&sellerID, &sellerUserID)
+		`SELECT m.user_id FROM Listing l JOIN Member m ON m.MemberID = l.SellerID WHERE l.ListingID = ?`,
+		listingID).Scan(&sellerUserID)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "listing not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
 		return
 	}
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
@@ -271,6 +335,210 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+	if body == nil {
+		body = map[string]interface{}{}
+	}
+
+	var cur struct {
+		Title         string
+		Description   sql.NullString
+		AskingPrice   float64
+		IsNegotiable  bool
+		Condition     sql.NullString
+		CategoryID    int
+		IsDonation    bool
+		Status        string
+	}
+	err = appdb.DB.QueryRowContext(ctx,
+		"SELECT Title, Description, AskingPrice, IsNegotiable, `Condition`, CategoryID, IsDonation, Status "+
+			"FROM Listing WHERE ListingID = ?", listingID,
+	).Scan(&cur.Title, &cur.Description, &cur.AskingPrice, &cur.IsNegotiable,
+		&cur.Condition, &cur.CategoryID, &cur.IsDonation, &cur.Status)
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "listing not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "load listing failed")
+		return
+	}
+
+	// Donation requires price 0: if turning on donation without asking_price, force 0 in the patch.
+	if v, ok := body["is_donation"]; ok {
+		if b, err := jsonToBool(v); err == nil && b {
+			if _, has := body["asking_price"]; !has {
+				body["asking_price"] = float64(0)
+			}
+		}
+	}
+
+	nextPrice := cur.AskingPrice
+	nextCat := cur.CategoryID
+	nextDon := cur.IsDonation
+
+	patch := make(map[string]interface{})
+
+	if v, ok := body["title"]; ok {
+		s, ok := v.(string)
+		if !ok {
+			respondError(w, http.StatusBadRequest, "title must be a string")
+			return
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			respondError(w, http.StatusBadRequest, "title cannot be empty")
+			return
+		}
+		if utf8.RuneCountInString(s) > 200 {
+			respondError(w, http.StatusBadRequest, "title too long (max 200 characters)")
+			return
+		}
+		patch["title"] = s
+	}
+
+	if v, has := body["description"]; has {
+		if v == nil {
+			patch["description"] = nil
+		} else if s, ok := v.(string); ok {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				patch["description"] = nil
+			} else {
+				if utf8.RuneCountInString(s) > 2000 {
+					respondError(w, http.StatusBadRequest, "description too long (max 2000 characters)")
+					return
+				}
+				patch["description"] = s
+			}
+		} else {
+			respondError(w, http.StatusBadRequest, "description must be a string or null")
+			return
+		}
+	}
+
+	if v, ok := body["asking_price"]; ok {
+		p, err := jsonNumToFloat(v)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid asking_price")
+			return
+		}
+		nextPrice = p
+		patch["asking_price"] = p
+	}
+
+	if v, ok := body["is_negotiable"]; ok {
+		b, err := jsonToBool(v)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid is_negotiable")
+			return
+		}
+		patch["is_negotiable"] = b
+	}
+
+	if v, has := body["condition"]; has {
+		if v == nil {
+			patch["condition"] = nil
+		} else if s, ok := v.(string); ok {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				patch["condition"] = nil
+			} else {
+				if _, ok := allowedListingConditions[s]; !ok {
+					respondError(w, http.StatusBadRequest, "invalid condition")
+					return
+				}
+				patch["condition"] = s
+			}
+		} else {
+			respondError(w, http.StatusBadRequest, "condition must be a string or null")
+			return
+		}
+	}
+
+	if v, ok := body["category_id"]; ok {
+		cid, err := jsonNumToInt(v)
+		if err != nil || cid <= 0 {
+			respondError(w, http.StatusBadRequest, "invalid category_id")
+			return
+		}
+		nextCat = cid
+		patch["category_id"] = cid
+	}
+
+	if v, ok := body["is_donation"]; ok {
+		b, err := jsonToBool(v)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid is_donation")
+			return
+		}
+		nextDon = b
+		patch["is_donation"] = b
+	}
+
+	if v, ok := body["status"]; ok {
+		s, ok := v.(string)
+		if !ok {
+			respondError(w, http.StatusBadRequest, "status must be a string")
+			return
+		}
+		if _, ok := allowedListingStatuses[s]; !ok {
+			respondError(w, http.StatusBadRequest, "invalid status")
+			return
+		}
+		patch["status"] = s
+	}
+
+	// Merged row must satisfy DB CHECK constraints
+	if nextPrice < 0 {
+		respondError(w, http.StatusBadRequest, "asking_price must be >= 0")
+		return
+	}
+	if nextDon && nextPrice != 0 {
+		respondError(w, http.StatusBadRequest, "donation listing must have asking_price 0")
+		return
+	}
+	if nextCat <= 0 {
+		respondError(w, http.StatusBadRequest, "invalid category_id")
+		return
+	}
+
+	var setClauses []string
+	var args []interface{}
+
+	if v, ok := body["expiry_date"]; ok {
+		if v == nil {
+			setClauses = append(setClauses, "ExpiryDate = NULL")
+		} else if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			t, err := time.Parse("2006-01-02", strings.TrimSpace(s))
+			if err != nil {
+				respondError(w, http.StatusBadRequest, "invalid expiry_date")
+				return
+			}
+			setClauses = append(setClauses, "ExpiryDate = ?")
+			args = append(args, t)
+		} else {
+			setClauses = append(setClauses, "ExpiryDate = NULL")
+		}
+	}
+
+	colMap := map[string]string{
+		"title": "Title", "description": "Description", "asking_price": "AskingPrice",
+		"is_negotiable": "IsNegotiable", "condition": "`Condition`",
+		"status": "Status", "category_id": "CategoryID", "is_donation": "IsDonation",
+	}
+	for jsonKey, col := range colMap {
+		if v, ok := patch[jsonKey]; ok {
+			setClauses = append(setClauses, col+" = ?")
+			args = append(args, v)
+		}
+	}
+
+	if len(setClauses) == 0 {
+		respondError(w, http.StatusBadRequest, "no valid fields")
+		return
+	}
+	setClauses = append(setClauses, "LastModifiedDate = NOW()")
+	args = append(args, listingID)
 
 	tx, err := appdb.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -279,35 +547,27 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
-
-	setMap := map[string]string{
-		"title": "Title", "description": "Description", "asking_price": "AskingPrice",
-		"is_negotiable": "IsNegotiable", "condition": "Condition",
-		"status": "Status", "preferred_meeting_location": "PreferredMeetingLocation",
-	}
-	var setClauses []string
-	var args []interface{}
-	for jsonKey, col := range setMap {
-		if v, ok := body[jsonKey]; ok {
-			setClauses = append(setClauses, col+" = ?")
-			args = append(args, v)
-		}
-	}
-	if len(setClauses) == 0 {
-		respondError(w, http.StatusBadRequest, "no valid fields")
+	if err := mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx)); err != nil {
+		respondError(w, http.StatusInternalServerError, "session vars failed")
 		return
 	}
-	setClauses = append(setClauses, "LastModifiedDate = NOW()")
-	args = append(args, listingID)
 
 	_, err = tx.ExecContext(ctx, "UPDATE Listing SET "+join(setClauses, ", ")+" WHERE ListingID = ?", args...)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "update failed")
+		respondError(w, http.StatusInternalServerError, "update failed: "+err.Error())
 		return
 	}
-	_ = tx.Commit()
-	respondJSON(w, http.StatusOK, map[string]string{"message": "listing updated"})
+	if err := tx.Commit(); err != nil {
+		respondError(w, http.StatusInternalServerError, "commit failed")
+		return
+	}
+
+	l, err := loadListingWithImages(ctx, listingID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to load listing after update")
+		return
+	}
+	respondJSON(w, http.StatusOK, l)
 }
 
 // DELETE /api/v1/listings/:id — own or admin (withdraw)
@@ -327,6 +587,10 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "listing not found")
 		return
 	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
 		mw.RespondForbidden(w)
 		return
@@ -338,12 +602,18 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
+	if err := mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx)); err != nil {
+		respondError(w, http.StatusInternalServerError, "session vars failed")
+		return
+	}
 
 	_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Withdrawn', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
 	_, _ = tx.ExecContext(ctx, `UPDATE Offer SET OfferStatus = 'Expired' WHERE ListingID = ? AND OfferStatus = 'Submitted'`, listingID)
 
-	_ = tx.Commit()
+	if err := tx.Commit(); err != nil {
+		respondError(w, http.StatusInternalServerError, "commit failed")
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]string{"message": "listing withdrawn"})
 }
 

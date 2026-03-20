@@ -279,13 +279,11 @@ CREATE TABLE Listing (
     AskingPrice DECIMAL(10, 2) NOT NULL,
     IsNegotiable BOOLEAN NOT NULL DEFAULT TRUE,
     `Condition` VARCHAR(20) NULL,
-    CourseCode VARCHAR(20) NULL,
     Status VARCHAR(20) NOT NULL DEFAULT 'Listed',
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     LastModifiedDate DATETIME NULL,
     ExpiryDate DATETIME NULL,
     IsDonation BOOLEAN NOT NULL DEFAULT FALSE,
-    PreferredMeetingLocation VARCHAR(200) NULL,
     WishRequestID INT NULL,
     CONSTRAINT FK_Listing_Seller FOREIGN KEY (SellerID) REFERENCES Member (MemberID) ON UPDATE CASCADE,
     CONSTRAINT FK_Listing_Category FOREIGN KEY (CategoryID) REFERENCES Category (CategoryID) ON UPDATE CASCADE,
@@ -507,7 +505,7 @@ CREATE TABLE Message (
 -- NULL session_id signals a direct (unauthorized) DB write
 -- ============================================================
 
-DELIMITER / /
+DELIMITER //
 
 CREATE PROCEDURE sp_audit_log(
     IN p_action    VARCHAR(20),
@@ -519,7 +517,7 @@ BEGIN
     VALUES (@session_id, @current_user_id, p_action, p_table, p_target_id, 'success');
 END //
 
-DELIMITER;
+DELIMITER ;
 
 -- ============================================================
 -- AUDIT TRIGGERS - All 14 project tables
@@ -527,7 +525,7 @@ DELIMITER;
 -- BEFORE UPDATE, BEFORE DELETE
 -- ============================================================
 
-DELIMITER / /
+DELIMITER //
 
 -- Category triggers
 CREATE TRIGGER trg_category_ai AFTER INSERT ON Category FOR EACH ROW
@@ -669,7 +667,7 @@ BEGIN CALL sp_audit_log('UPDATE', 'Message', OLD.MessageID); END //
 CREATE TRIGGER trg_message_bd BEFORE DELETE ON Message FOR EACH ROW
 BEGIN CALL sp_audit_log('DELETE', 'Message', OLD.MessageID); END //
 
-DELIMITER;
+DELIMITER ;
 
 -- ============================================================
 -- SEED DATA
