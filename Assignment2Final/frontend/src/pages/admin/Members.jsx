@@ -12,6 +12,7 @@ export default function AdminMembers() {
   const [search, setSearch]     = useState('');
   const [loading, setLoading]   = useState(true);
   const [actionId, setActionId] = useState(null);
+  const [deactivateConfirm, setDeactivateConfirm] = useState(null); // { member_id, name }
 
   const load = () => {
     setLoading(true);
@@ -29,18 +30,27 @@ export default function AdminMembers() {
 
   useEffect(load, [page, search]);
 
-  const handleAction = async (memberId, action) => {
+  const handleActivate = async (memberId) => {
     setActionId(memberId);
     try {
-      if (action === 'delete') {
-        if (!confirm('Remove this member? This will deactivate the account, revoke sessions, and withdraw listings.')) return;
-        await api.delete(`/members/${memberId}`);
-        toast.success('Member removed');
-      } else {
-        const isActive = action === 'activate';
-        await api.put(`/members/${memberId}`, { is_active: isActive });
-        toast.success(isActive ? 'Member activated' : 'Member deactivated');
-      }
+      await api.put(`/members/${memberId}`, { is_active: true });
+      toast.success('Member activated');
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleDeactivateConfirmed = async () => {
+    if (!deactivateConfirm) return;
+    const { member_id: memberId } = deactivateConfirm;
+    setDeactivateConfirm(null);
+    setActionId(memberId);
+    try {
+      await api.put(`/members/${memberId}`, { is_active: false });
+      toast.success('Member deactivated');
       load();
     } catch (err) {
       toast.error(err.message);
@@ -97,7 +107,8 @@ export default function AdminMembers() {
                     <div className="flex gap-2">
                       {m.is_active && (
                         <button
-                          onClick={() => handleAction(m.member_id, 'deactivate')}
+                          type="button"
+                          onClick={() => setDeactivateConfirm({ member_id: m.member_id, name: m.name })}
                           disabled={actionId === m.member_id}
                           className="btn-secondary btn-sm text-xs"
                         >
@@ -106,20 +117,14 @@ export default function AdminMembers() {
                       )}
                       {!m.is_active && (
                         <button
-                          onClick={() => handleAction(m.member_id, 'activate')}
+                          type="button"
+                          onClick={() => handleActivate(m.member_id)}
                           disabled={actionId === m.member_id}
                           className="btn-primary btn-sm text-xs"
                         >
                           Activate
                         </button>
                       )}
-                      <button
-                        onClick={() => handleAction(m.member_id, 'delete')}
-                        disabled={actionId === m.member_id}
-                        className="btn-danger btn-sm text-xs"
-                      >
-                        Remove
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -135,6 +140,45 @@ export default function AdminMembers() {
       )}
 
       <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+
+      {deactivateConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="deactivate-title"
+          onClick={() => setDeactivateConfirm(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 id="deactivate-title" className="text-lg font-semibold text-gray-900">
+              Deactivate member?
+            </h2>
+            <p className="text-sm text-gray-600">
+              This will deactivate <span className="font-medium text-gray-900">{deactivateConfirm.name}</span>.
+              They will not be able to sign in until reactivated.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setDeactivateConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger btn-sm"
+                onClick={handleDeactivateConfirmed}
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

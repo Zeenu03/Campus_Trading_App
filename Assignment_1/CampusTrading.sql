@@ -72,18 +72,12 @@ CREATE TABLE Administrator (
 -- 3. Category Table
 -- ============================================================
 CREATE TABLE Category (
-    CategoryID       INT             AUTO_INCREMENT PRIMARY KEY,
-    CategoryName     VARCHAR(100)    NOT NULL,
-    ParentCategoryID INT             NULL,
-    Description      VARCHAR(500)    NULL,
-    IsActive         BOOLEAN         NOT NULL DEFAULT TRUE,
+    CategoryID   INT          AUTO_INCREMENT PRIMARY KEY,
+    CategoryName VARCHAR(100) NOT NULL,
+    Description  VARCHAR(500) NULL,
+    IsActive     BOOLEAN      NOT NULL DEFAULT TRUE,
 
-    -- Self-referencing FK for hierarchy
-    CONSTRAINT FK_Category_Parent FOREIGN KEY (ParentCategoryID)
-        REFERENCES Category(CategoryID),
-
-    -- Category name unique within same parent level
-    CONSTRAINT UQ_Category_Name_Parent UNIQUE (CategoryName, ParentCategoryID)
+    CONSTRAINT UQ_Category_Name UNIQUE (CategoryName)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -490,25 +484,25 @@ VALUES
 (10, 'Mr. Harsha de Silva',    'harsha.mod@iitgn.ac.in',     'hash_admin_10', 'Moderator',  '2025-09-01', '2026-02-06', 1);
 
 -- --------------------------------------------------------
--- Categories (15 rows - with hierarchy)
+-- Categories (15 rows)
 -- --------------------------------------------------------
-INSERT INTO Category (CategoryID, CategoryName, ParentCategoryID, Description, IsActive)
+INSERT INTO Category (CategoryID, CategoryName, Description, IsActive)
 VALUES
-(1,  'Books & Textbooks',  NULL, 'Academic and general books',           1),
-(2,  'Electronics',        NULL, 'Electronic devices and accessories',   1),
-(3,  'Furniture',          NULL, 'Room and study furniture',             1),
-(4,  'Sports & Fitness',   NULL, 'Sports equipment and fitness gear',    1),
-(5,  'Clothing',           NULL, 'Clothes and accessories',              1),
-(6,  'Engineering Books',  1,    'Engineering textbooks and references', 1),
-(7,  'Science Books',      1,    'Science and math textbooks',           1),
-(8,  'Computing',          2,    'Laptops, tablets, and accessories',    1),
-(9,  'Mobile Phones',      2,    'Smartphones and accessories',          1),
-(10, 'Calculators',        2,    'Scientific and graphing calculators',  1),
-(11, 'Study Furniture',    3,    'Desks, chairs, and shelves',           1),
-(12, 'Room Essentials',    3,    'Lamps, fans, and room items',          1),
-(13, 'Gym Equipment',      4,    'Dumbbells, mats, and gear',            1),
-(14, 'Racket Sports',      4,    'Badminton, tennis equipment',          1),
-(15, 'Donations',          NULL, 'Free items given away',                1);
+(1,  'Books & Textbooks',  'Academic and general books',           1),
+(2,  'Electronics',        'Electronic devices and accessories',   1),
+(3,  'Furniture',          'Room and study furniture',             1),
+(4,  'Sports & Fitness',   'Sports equipment and fitness gear',    1),
+(5,  'Clothing',           'Clothes and accessories',              1),
+(6,  'Engineering Books',  'Engineering textbooks and references', 1),
+(7,  'Science Books',      'Science and math textbooks',           1),
+(8,  'Computing',          'Laptops, tablets, and accessories',    1),
+(9,  'Mobile Phones',      'Smartphones and accessories',          1),
+(10, 'Calculators',        'Scientific and graphing calculators',  1),
+(11, 'Study Furniture',    'Desks, chairs, and shelves',           1),
+(12, 'Room Essentials',    'Lamps, fans, and room items',          1),
+(13, 'Gym Equipment',      'Dumbbells, mats, and gear',            1),
+(14, 'Racket Sports',      'Badminton, tennis equipment',          1),
+(15, 'Donations',          'Free items given away',                1);
 
 -- --------------------------------------------------------
 -- WishRequests (12 rows)

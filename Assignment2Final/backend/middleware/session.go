@@ -61,31 +61,18 @@ func SessionGuard(next http.Handler) http.Handler {
 
 		// Check user is still active
 		var isActive bool
-		var userType string
 		err = appdb.DB.QueryRowContext(r.Context(),
-			`SELECT is_active, user_type FROM sys_user WHERE user_id = ?`, userID,
-		).Scan(&isActive, &userType)
+			`SELECT is_active FROM sys_user WHERE user_id = ?`, userID,
+		).Scan(&isActive)
 		if err != nil || !isActive {
 			respondUnauthorized(w, "user inactive or not found")
 			return
 		}
 
-		// Load roles
-		rows, err := appdb.DB.QueryContext(r.Context(),
-			`SELECT r.role_name FROM sys_role r
-             JOIN sys_user_role ur ON ur.role_id = r.role_id
-             WHERE ur.user_id = ?`, userID)
+		roles, err := LoadRoleNames(r.Context(), userID)
 		if err != nil {
 			respondUnauthorized(w, "role lookup error")
 			return
-		}
-		defer rows.Close()
-		var roles []string
-		for rows.Next() {
-			var role string
-			if err := rows.Scan(&role); err == nil {
-				roles = append(roles, role)
-			}
 		}
 
 		// Resolve MemberID for member users (NULL for admin-only users)
@@ -125,6 +112,27 @@ func GetSessionID(ctx context.Context) string {
 func GetRoles(ctx context.Context) []string {
 	v, _ := ctx.Value(CtxRoles).([]string)
 	return v
+}
+
+// LoadRoleNames returns role_name values for a user from sys_user_role + sys_role.
+func LoadRoleNames(ctx context.Context, userID int) ([]string, error) {
+	rows, err := appdb.DB.QueryContext(ctx,
+		`SELECT r.role_name FROM sys_role r
+		 JOIN sys_user_role ur ON ur.role_id = r.role_id
+		 WHERE ur.user_id = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var roles []string
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			continue
+		}
+		roles = append(roles, role)
+	}
+	return roles, rows.Err()
 }
 
 // HasRole returns true if the context roles contain the given role.

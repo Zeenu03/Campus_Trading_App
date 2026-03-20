@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Pagination from '../components/Pagination';
@@ -37,6 +38,7 @@ function ListingCard({ listing }) {
 }
 
 export default function Listings() {
+  const { isMember } = useAuth();
   const [listings, setListings] = useState([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -84,7 +86,9 @@ export default function Listings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Browse Listings</h1>
-        <Link to="/listings/new" className="btn-primary text-sm">+ Post Listing</Link>
+        {isMember() && (
+          <Link to="/listings/new" className="btn-primary text-sm">+ Post Listing</Link>
+        )}
       </div>
 
       {/* Filters */}

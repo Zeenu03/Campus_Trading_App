@@ -8,7 +8,6 @@ type SysUser struct {
 	UserID       int       `json:"user_id"`
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
-	UserType     string    `json:"user_type"`
 	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 }
@@ -70,11 +69,10 @@ type Administrator struct {
 }
 
 type Category struct {
-	CategoryID       int     `json:"category_id"`
-	CategoryName     string  `json:"category_name"`
-	ParentCategoryID *int    `json:"parent_category_id"`
-	Description      *string `json:"description"`
-	IsActive         bool    `json:"is_active"`
+	CategoryID   int     `json:"category_id"`
+	CategoryName string  `json:"category_name"`
+	Description  *string `json:"description"`
+	IsActive     bool    `json:"is_active"`
 }
 
 type Listing struct {

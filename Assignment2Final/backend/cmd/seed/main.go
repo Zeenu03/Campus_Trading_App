@@ -71,7 +71,7 @@ func main() {
 
 	// Insert sys_user
 	res, err := tx.Exec(
-		`INSERT INTO sys_user (email, password_hash, user_type) VALUES (?, ?, 'admin')`,
+		`INSERT INTO sys_user (email, password_hash) VALUES (?, ?)`,
 		email, string(hash),
 	)
 	if err != nil {

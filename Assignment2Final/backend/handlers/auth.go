@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,50 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+var allowedRegisterHostels = map[string]struct{}{
+	"Aaiban": {}, "Buqni": {}, "Chimar": {}, "Duven": {}, "Emiet": {}, "Ijoka": {},
+	"Jurqia": {}, "Kyzeal": {}, "Lakhag": {}, "Firpel": {}, "Hiqom": {},
+}
+
+func normalizeOptionalPtr(ptr *string) *string {
+	if ptr == nil {
+		return nil
+	}
+	s := strings.TrimSpace(*ptr)
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func validateRegisterHostelRoom(hostel *string, room *string) string {
+	h := ""
+	if hostel != nil {
+		h = strings.TrimSpace(*hostel)
+	}
+	r := ""
+	if room != nil {
+		r = strings.TrimSpace(*room)
+	}
+	if h == "" && r == "" {
+		return ""
+	}
+	if h == "" {
+		return "hostel is required when room_number is provided"
+	}
+	if r == "" {
+		return "room_number is required when hostel is provided"
+	}
+	if _, ok := allowedRegisterHostels[h]; !ok {
+		return "invalid hostel name"
+	}
+	n, err := strconv.Atoi(r)
+	if err != nil || n < 100 || n > 499 {
+		return "room_number must be an integer from 100 to 499"
+	}
+	return ""
+}
 
 // POST /api/v1/auth/login
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -34,12 +79,11 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	var userID int
 	var passwordHash string
 	var isActive bool
-	var userType string
 
 	err := appdb.DB.QueryRowContext(r.Context(),
-		`SELECT user_id, password_hash, is_active, user_type FROM sys_user WHERE email = ?`,
+		`SELECT user_id, password_hash, is_active FROM sys_user WHERE email = ?`,
 		req.Email,
-	).Scan(&userID, &passwordHash, &isActive, &userType)
+	).Scan(&userID, &passwordHash, &isActive)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusUnauthorized, "invalid credentials")
@@ -76,10 +120,16 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update last login for admin
-	if userType == "admin" {
-		_, _ = appdb.DB.ExecContext(r.Context(),
-			`UPDATE Administrator SET LastLoginDate = NOW() WHERE user_id = ?`, userID)
+	// Update last login for users with the admin role
+	roles, err := mw.LoadRoleNames(r.Context(), userID)
+	if err == nil {
+		for _, role := range roles {
+			if role == "admin" {
+				_, _ = appdb.DB.ExecContext(r.Context(),
+					`UPDATE Administrator SET LastLoginDate = NOW() WHERE user_id = ?`, userID)
+				break
+			}
+		}
 	}
 
 	http.SetCookie(w, &http.Cookie{
@@ -143,6 +193,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if msg := validateRegisterHostelRoom(req.Hostel, req.RoomNumber); msg != "" {
+		respondError(w, http.StatusBadRequest, msg)
+		return
+	}
+	req.Hostel = normalizeOptionalPtr(req.Hostel)
+	req.RoomNumber = normalizeOptionalPtr(req.RoomNumber)
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "password hashing failed")
@@ -158,7 +215,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO sys_user (email, password_hash, user_type) VALUES (?, ?, 'member')`,
+		`INSERT INTO sys_user (email, password_hash) VALUES (?, ?)`,
 		req.Email, string(hash),
 	)
 	if err != nil {
@@ -220,44 +277,51 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var email, userType string
+	var email string
 	_ = appdb.DB.QueryRowContext(ctx,
-		`SELECT email, user_type FROM sys_user WHERE user_id = ?`, userID,
-	).Scan(&email, &userType)
+		`SELECT email FROM sys_user WHERE user_id = ?`, userID,
+	).Scan(&email)
 
 	resp := map[string]interface{}{
-		"user_id":   userID,
-		"email":     email,
-		"user_type": userType,
-		"roles":     roles,
+		"user_id": userID,
+		"email":   email,
+		"roles":   roles,
 	}
 
-	if userType == "member" {
+	if mw.HasRole(ctx, "member") {
 		memberID := mw.GetMemberID(ctx)
-		resp["member_id"] = memberID
-		var name, contact string
-		var dept, hostel, room, bio, img *string
-		var yrStudy *int
-		var isActive bool
-		_ = appdb.DB.QueryRowContext(ctx,
-			`SELECT m.Name, m.ContactNumber, m.Department, m.YearOfStudy, m.Hostel, m.RoomNumber, m.Bio, m.Image, u.is_active
+		if memberID > 0 {
+			resp["member_id"] = memberID
+			var name, contact string
+			var dept, hostel, room, bio, img *string
+			var yrStudy *int
+			var isActive bool
+			_ = appdb.DB.QueryRowContext(ctx,
+				`SELECT m.Name, m.ContactNumber, m.Department, m.YearOfStudy, m.Hostel, m.RoomNumber, m.Bio, m.Image, u.is_active
              FROM Member m JOIN sys_user u ON u.user_id = m.user_id WHERE m.MemberID = ?`, memberID,
-		).Scan(&name, &contact, &dept, &yrStudy, &hostel, &room, &bio, &img, &isActive)
-		resp["name"] = name
-		resp["contact_number"] = contact
-		resp["department"] = dept
-		resp["year_of_study"] = yrStudy
-		resp["hostel"] = hostel
-		resp["is_active"] = isActive
-	} else {
+			).Scan(&name, &contact, &dept, &yrStudy, &hostel, &room, &bio, &img, &isActive)
+			resp["name"] = name
+			resp["contact_number"] = contact
+			resp["department"] = dept
+			resp["year_of_study"] = yrStudy
+			resp["hostel"] = hostel
+			resp["is_active"] = isActive
+		}
+	}
+
+	if mw.HasRole(ctx, "admin") {
 		var adminID int
-		var name, role string
-		_ = appdb.DB.QueryRowContext(ctx,
+		var adminName, adminRole string
+		err := appdb.DB.QueryRowContext(ctx,
 			`SELECT AdminID, Name, Role FROM Administrator WHERE user_id = ?`, userID,
-		).Scan(&adminID, &name, &role)
-		resp["admin_id"] = adminID
-		resp["name"] = name
-		resp["admin_role"] = role
+		).Scan(&adminID, &adminName, &adminRole)
+		if err == nil {
+			resp["admin_id"] = adminID
+			resp["admin_role"] = adminRole
+			if _, hasName := resp["name"]; !hasName {
+				resp["name"] = adminName
+			}
+		}
 	}
 
 	respondJSON(w, http.StatusOK, resp)

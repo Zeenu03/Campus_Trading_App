@@ -8,6 +8,10 @@ const DEPARTMENTS = [
   'Electrical Engineering', 'Mathematics', 'Mechanical Engineering', 'Physics', 'Other',
 ];
 
+const HOSTELS = [
+  'Aaiban', 'Buqni', 'Chimar', 'Duven', 'Emiet', 'Ijoka', 'Jurqia', 'Kyzeal', 'Lakhag', 'Firpel', 'Hiqom',
+];
+
 /** Must be defined outside Register — an inner component is recreated each render and React remounts inputs (loses focus). */
 function RegisterField({ name, label, type = 'text', placeholder, required, form, errors, onChange }) {
   return (
@@ -47,6 +51,15 @@ export default function Register() {
     if (!form.contact_number)       e.contact_number = 'Contact number is required';
     if (form.year_of_study && (form.year_of_study < 1 || form.year_of_study > 5))
                                     e.year_of_study  = 'Year must be between 1 and 5';
+
+    const hasHostel = Boolean(form.hostel);
+    const roomStr = String(form.room_number ?? '').trim();
+    const roomNum = roomStr === '' ? NaN : parseInt(roomStr, 10);
+    if (hasHostel && roomStr === '') e.room_number = 'Room number is required when hostel is selected';
+    if (!hasHostel && roomStr !== '') e.hostel = 'Select a hostel when entering a room number';
+    if (roomStr !== '' && (Number.isNaN(roomNum) || roomNum < 100 || roomNum > 499))
+      e.room_number = 'Room number must be between 100 and 499';
+
     return e;
   };
 
@@ -70,7 +83,7 @@ export default function Register() {
         department: form.department || null,
         year_of_study: form.year_of_study ? parseInt(form.year_of_study) : null,
         hostel: form.hostel || null,
-        room_number: form.room_number || null,
+        room_number: form.room_number.trim() ? form.room_number.trim() : null,
         bio: form.bio || null,
       };
       await api.post('/auth/register', payload);
@@ -120,8 +133,37 @@ export default function Register() {
                 {errors.year_of_study && <p className="mt-1 text-xs text-red-600">{errors.year_of_study}</p>}
               </div>
 
-              <RegisterField {...fieldProps} name="hostel"      label="Hostel"      placeholder="e.g. Hostel A" />
-              <RegisterField {...fieldProps} name="room_number" label="Room Number"  placeholder="e.g. A-101" />
+              <div>
+                <label className="label">Hostel</label>
+                <select
+                  name="hostel"
+                  value={form.hostel}
+                  onChange={handleChange}
+                  className={`input ${errors.hostel ? 'border-red-400 ring-1 ring-red-400' : ''}`}
+                >
+                  <option value="">Not specified</option>
+                  {HOSTELS.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                {errors.hostel && <p className="mt-1 text-xs text-red-600">{errors.hostel}</p>}
+              </div>
+
+              <div>
+                <label className="label">Room number</label>
+                <input
+                  name="room_number"
+                  type="number"
+                  min={100}
+                  max={499}
+                  step={1}
+                  value={form.room_number}
+                  onChange={handleChange}
+                  className={`input ${errors.room_number ? 'border-red-400 ring-1 ring-red-400' : ''}`}
+                  placeholder="100–499"
+                />
+                {errors.room_number && <p className="mt-1 text-xs text-red-600">{errors.room_number}</p>}
+              </div>
             </div>
 
             <div>

@@ -232,7 +232,7 @@ func CreateAdminUser(w http.ResponseWriter, r *http.Request) {
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO sys_user (email, password_hash, user_type) VALUES (?, ?, 'admin')`,
+		`INSERT INTO sys_user (email, password_hash) VALUES (?, ?)`,
 		body.Email, string(hash))
 	if err != nil {
 		if sqlContains(err.Error(), "Duplicate") {

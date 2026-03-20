@@ -144,7 +144,6 @@ CREATE TABLE sys_user (
     user_id INT PRIMARY KEY AUTO_INCREMENT,
     email VARCHAR(120) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    user_type ENUM('member', 'admin') NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT CHK_email_iitgn CHECK (email LIKE '%@iitgn.ac.in')
@@ -191,14 +190,9 @@ CREATE TABLE audit_log (
 CREATE TABLE Category (
     CategoryID INT AUTO_INCREMENT PRIMARY KEY,
     CategoryName VARCHAR(100) NOT NULL,
-    ParentCategoryID INT NULL,
     Description VARCHAR(500) NULL,
     IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-    CONSTRAINT FK_Category_Parent FOREIGN KEY (ParentCategoryID) REFERENCES Category (CategoryID),
-    CONSTRAINT UQ_Category_Name_Parent UNIQUE (
-        CategoryName,
-        ParentCategoryID
-    )
+    CONSTRAINT UQ_Category_Name UNIQUE (CategoryName)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- Member: user_id links to sys_user; Email/PasswordHash removed (in sys_user)
@@ -684,117 +678,101 @@ DELIMITER;
 -- System roles
 INSERT INTO sys_role (role_name) VALUES ('admin'), ('member');
 
--- Category hierarchy (15 categories)
+-- Categories (15)
 INSERT INTO
     Category (
         CategoryID,
         CategoryName,
-        ParentCategoryID,
         Description,
         IsActive
     )
 VALUES (
         1,
         'Books & Textbooks',
-        NULL,
         'Academic and general books',
         1
     ),
     (
         2,
         'Electronics',
-        NULL,
         'Electronic devices and accessories',
         1
     ),
     (
         3,
         'Furniture',
-        NULL,
         'Room and study furniture',
         1
     ),
     (
         4,
         'Sports & Fitness',
-        NULL,
         'Sports equipment and fitness gear',
         1
     ),
     (
         5,
         'Clothing',
-        NULL,
         'Clothes and accessories',
         1
     ),
     (
         6,
         'Engineering Books',
-        1,
         'Engineering textbooks and references',
         1
     ),
     (
         7,
         'Science Books',
-        1,
         'Science and math textbooks',
         1
     ),
     (
         8,
         'Computing',
-        2,
         'Laptops, tablets, and accessories',
         1
     ),
     (
         9,
         'Mobile Phones',
-        2,
         'Smartphones and accessories',
         1
     ),
     (
         10,
         'Calculators',
-        2,
         'Scientific and graphing calculators',
         1
     ),
     (
         11,
         'Study Furniture',
-        3,
         'Desks, chairs, and shelves',
         1
     ),
     (
         12,
         'Room Essentials',
-        3,
         'Lamps, fans, and room items',
         1
     ),
     (
         13,
         'Gym Equipment',
-        4,
         'Dumbbells, mats, and gear',
         1
     ),
     (
         14,
         'Racket Sports',
-        4,
         'Badminton, tennis equipment',
         1
     ),
     (
         15,
         'Donations',
-        NULL,
         'Free items given away',
         1
     );
