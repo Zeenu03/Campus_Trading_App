@@ -86,11 +86,22 @@ func main() {
 			r.Delete("/listings/{id}/images/{imageId}", handlers.DeleteListingImage) // own|admin
 
 			// Offers
-			r.Get("/listings/{id}/offers", handlers.ListOffersForListing) // own-seller|admin
-			r.Post("/listings/{id}/offers", handlers.CreateOffer)         // member
-			r.Put("/offers/{id}/accept", handlers.AcceptOffer)            // own-seller
-			r.Put("/offers/{id}/decline", handlers.DeclineOffer)          // own-seller
-			r.Put("/offers/{id}/withdraw", handlers.WithdrawOffer)        // own-buyer
+			r.Get("/listings/{id}/my-offer", handlers.GetMyOffer)               // own-buyer
+			r.Get("/listings/{id}/offers", handlers.ListOffersForListing)       // own-seller|admin
+			r.Post("/listings/{id}/offers", handlers.CreateOffer)               // member
+			r.Put("/offers/{id}/accept", handlers.AcceptOffer)                  // own-seller
+			r.Put("/offers/{id}/decline", handlers.DeclineOffer)                // own-seller
+			r.Put("/offers/{id}/withdraw", handlers.WithdrawOffer)              // own-buyer
+			r.Put("/offers/{id}/price", handlers.UpdateOfferPrice)              // own-buyer
+			r.Put("/offers/{id}/buyer-accept", handlers.BuyerAcceptOffer)       // own-buyer
+			r.Put("/offers/{id}/buyer-decline", handlers.BuyerDeclineOffer)     // own-buyer
+
+			// Threads & Messages
+			r.Get("/listings/{id}/my-thread", handlers.GetMyThread)             // own-buyer
+			r.Post("/listings/{id}/threads", handlers.CreateThread)             // member (chat-only)
+			r.Get("/listings/{id}/interactions", handlers.ListInteractions)     // own-seller|admin
+			r.Get("/threads/{id}/messages", handlers.ListMessages)              // buyer|seller
+			r.Post("/threads/{id}/messages", handlers.SendMessage)              // buyer|seller
 
 			// Transactions
 			r.Get("/transactions", handlers.ListTransactions)                // auth

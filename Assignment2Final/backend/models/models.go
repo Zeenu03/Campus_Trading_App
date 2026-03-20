@@ -106,16 +106,17 @@ type ListingImage struct {
 }
 
 type Offer struct {
-	OfferID      int        `json:"offer_id"`
-	ListingID    int        `json:"listing_id"`
-	BuyerID      int        `json:"buyer_id"`
-	BuyerName    string     `json:"buyer_name,omitempty"` // joined
-	OfferedPrice float64    `json:"offered_price"`
-	AgreedPrice  *float64   `json:"agreed_price"`
-	OfferStatus  string     `json:"offer_status"`
-	SubmittedDate time.Time `json:"submitted_date"`
-	ResponseDate *time.Time `json:"response_date"`
-	ExpiryDate   *time.Time `json:"expiry_date"`
+	OfferID       int        `json:"offer_id"`
+	ListingID     int        `json:"listing_id"`
+	BuyerID       int        `json:"buyer_id"`
+	BuyerName     string     `json:"buyer_name,omitempty"` // joined
+	OfferedPrice  float64    `json:"offered_price"`
+	AgreedPrice   *float64   `json:"agreed_price"`
+	OfferStatus   string     `json:"offer_status"`
+	Reason        *string    `json:"reason"`
+	SubmittedDate time.Time  `json:"submitted_date"`
+	ResponseDate  *time.Time `json:"response_date"`
+	ExpiryDate    *time.Time `json:"expiry_date"`
 }
 
 type Transaction struct {
@@ -132,6 +133,7 @@ type Transaction struct {
 	SellerConfirmed bool       `json:"seller_confirmed"`
 	BuyerConfirmed  bool       `json:"buyer_confirmed"`
 	Status          string     `json:"status"`
+	Reason          *string    `json:"reason"`
 	CreatedDate     time.Time  `json:"created_date"`
 }
 
@@ -198,6 +200,31 @@ type Notification struct {
 	IsRead              bool       `json:"is_read"`
 	CreatedDate         time.Time  `json:"created_date"`
 	ReadDate            *time.Time `json:"read_date"`
+}
+
+type MessageThread struct {
+	ThreadID           int        `json:"thread_id"`
+	ListingID          int        `json:"listing_id"`
+	BuyerID            int        `json:"buyer_id"`
+	BuyerName          string     `json:"buyer_name,omitempty"` // joined
+	OfferID            *int       `json:"offer_id"`
+	OfferedPrice       *float64   `json:"offered_price"`   // joined from Offer
+	AgreedPrice        *float64   `json:"agreed_price"`    // joined from Offer
+	OfferStatus        *string    `json:"offer_status"`    // joined from Offer
+	OfferReason        *string    `json:"offer_reason"`    // joined from Offer
+	AskingPrice        float64    `json:"asking_price"`    // joined from Listing
+	LastMessagePreview *string    `json:"last_message_preview"` // subquery
+	CreatedDate        time.Time  `json:"created_at"`
+	IsActive           bool       `json:"is_active"`
+}
+
+type Message struct {
+	MessageID   int       `json:"message_id"`
+	ThreadID    int       `json:"thread_id"`
+	SenderID    int       `json:"sender_id"`
+	SenderName  string    `json:"sender_name,omitempty"` // joined
+	MessageText string    `json:"message_text"`
+	SentDate    time.Time `json:"sent_date"`
 }
 
 // ── Request/Response DTOs ─────────────────────────────────────

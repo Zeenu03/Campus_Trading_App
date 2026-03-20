@@ -334,6 +334,7 @@ CREATE TABLE Offer (
     OfferedPrice DECIMAL(10, 2) NOT NULL,
     AgreedPrice DECIMAL(10, 2) NULL,
     OfferStatus VARCHAR(20) NOT NULL DEFAULT 'Submitted',
+    Reason VARCHAR(1000) NULL,
     SubmittedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ResponseDate DATETIME NULL,
     ExpiryDate DATETIME NULL,
@@ -348,7 +349,8 @@ CREATE TABLE Offer (
             'Expired'
         )
     ),
-    CONSTRAINT CHK_Offer_Price CHECK (OfferedPrice > 0)
+    CONSTRAINT CHK_Offer_Price CHECK (OfferedPrice > 0),
+    CONSTRAINT UQ_Offer_Listing_Buyer UNIQUE (ListingID, BuyerID)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE `Transaction` (
@@ -362,6 +364,7 @@ CREATE TABLE `Transaction` (
     SellerConfirmed BOOLEAN NOT NULL DEFAULT FALSE,
     BuyerConfirmed BOOLEAN NOT NULL DEFAULT FALSE,
     Status VARCHAR(20) NOT NULL DEFAULT 'Scheduled',
+    Reason VARCHAR(1000) NULL,
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT FK_Transaction_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID),
     CONSTRAINT FK_Transaction_Seller FOREIGN KEY (SellerID) REFERENCES Member (MemberID),
@@ -475,12 +478,12 @@ CREATE TABLE MessageThread (
     ThreadID INT AUTO_INCREMENT PRIMARY KEY,
     ListingID INT NOT NULL,
     BuyerID INT NOT NULL,
-    OfferID INT NOT NULL,
+    OfferID INT NULL,
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     IsActive BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT FK_Thread_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID),
     CONSTRAINT FK_Thread_Buyer FOREIGN KEY (BuyerID) REFERENCES Member (MemberID),
-    CONSTRAINT FK_Thread_Offer FOREIGN KEY (OfferID) REFERENCES Offer (OfferID),
+    CONSTRAINT FK_Thread_Offer FOREIGN KEY (OfferID) REFERENCES Offer (OfferID) ON DELETE SET NULL,
     CONSTRAINT UQ_Thread_Listing_Buyer UNIQUE (ListingID, BuyerID)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 

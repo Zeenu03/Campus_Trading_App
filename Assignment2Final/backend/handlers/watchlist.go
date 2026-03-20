@@ -108,6 +108,7 @@ func AddToWatchlist(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /api/v1/watchlist/listing/:listingId — member, remove current user's watch by listing ID
+// Blocked while the member has an active (Submitted) offer on this listing.
 func RemoveFromWatchlistByListing(w http.ResponseWriter, r *http.Request) {
 	listingID, err := urlParamInt(r, "listingId")
 	if err != nil {
@@ -118,6 +119,16 @@ func RemoveFromWatchlistByListing(w http.ResponseWriter, r *http.Request) {
 	memberID := mw.GetMemberID(ctx)
 	if memberID == 0 {
 		respondError(w, http.StatusForbidden, "member only")
+		return
+	}
+
+	// Block removal if there is an active offer
+	var activeOfferCount int
+	_ = appdb.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM Offer WHERE ListingID = ? AND BuyerID = ? AND OfferStatus = 'Submitted'`,
+		listingID, memberID).Scan(&activeOfferCount)
+	if activeOfferCount > 0 {
+		respondError(w, http.StatusConflict, "cannot remove: active offer in progress")
 		return
 	}
 
