@@ -68,6 +68,18 @@ DROP TRIGGER IF EXISTS trg_listingimage_bu;
 
 DROP TRIGGER IF EXISTS trg_listingimage_bd;
 
+DROP TRIGGER IF EXISTS trg_listingwishrequest_ai;
+
+DROP TRIGGER IF EXISTS trg_listingwishrequest_bu;
+
+DROP TRIGGER IF EXISTS trg_listingwishrequest_bd;
+
+DROP TRIGGER IF EXISTS trg_wishrequestimage_ai;
+
+DROP TRIGGER IF EXISTS trg_wishrequestimage_bu;
+
+DROP TRIGGER IF EXISTS trg_wishrequestimage_bd;
+
 DROP TRIGGER IF EXISTS trg_listing_ai;
 
 DROP TRIGGER IF EXISTS trg_listing_bu;
@@ -142,6 +154,10 @@ DROP TABLE IF EXISTS `Transaction`;
 DROP TABLE IF EXISTS Offer;
 
 DROP TABLE IF EXISTS ListingImage;
+
+DROP TABLE IF EXISTS ListingWishRequest;
+
+DROP TABLE IF EXISTS WishRequestImage;
 
 DROP TABLE IF EXISTS Listing;
 
@@ -259,10 +275,10 @@ CREATE TABLE Administrator (
         )
     )
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
-
 CREATE TABLE WishRequest (
     WishRequestID INT AUTO_INCREMENT PRIMARY KEY,
     RequesterID INT NOT NULL,
+    CategoryID INT NOT NULL,
     ItemDescription VARCHAR(500) NOT NULL,
     MinBudget DECIMAL(10, 2) NULL,
     MaxBudget DECIMAL(10, 2) NULL,
@@ -273,6 +289,7 @@ CREATE TABLE WishRequest (
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FulfilledDate DATETIME NULL,
     CONSTRAINT FK_WishRequest_Member FOREIGN KEY (RequesterID) REFERENCES Member (MemberID) ON UPDATE CASCADE,
+    CONSTRAINT FK_WishRequest_Category FOREIGN KEY (CategoryID) REFERENCES Category (CategoryID) ON UPDATE CASCADE,
     CONSTRAINT CHK_WishRequest_Status CHECK (
         Status IN (
             'Active',
@@ -295,6 +312,17 @@ CREATE TABLE WishRequest (
         )
         OR PreferredCondition IS NULL
     )
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE WishRequestImage (
+    ImageID INT AUTO_INCREMENT PRIMARY KEY,
+    WishRequestID INT NOT NULL,
+    ImageURL VARCHAR(500) NOT NULL,
+    ImageOrder INT NOT NULL,
+    UploadedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT FK_WishRequestImage_WishRequest FOREIGN KEY (WishRequestID) REFERENCES WishRequest (WishRequestID) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT CHK_WishRequestImage_Order CHECK (ImageOrder >= 1),
+    CONSTRAINT UQ_WishRequestImage_Order UNIQUE (WishRequestID, ImageOrder)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE Listing (
@@ -338,6 +366,15 @@ CREATE TABLE ListingImage (
     CONSTRAINT FK_ListingImage_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT CHK_ListingImage_Order CHECK (ImageOrder >= 1),
     CONSTRAINT UQ_ListingImage_Order UNIQUE (ListingID, ImageOrder)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE ListingWishRequest (
+    ListingID INT NOT NULL,
+    WishRequestID INT NOT NULL,
+    LinkedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ListingID, WishRequestID),
+    CONSTRAINT FK_ListingWishRequest_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID) ON DELETE CASCADE,
+    CONSTRAINT FK_ListingWishRequest_WishRequest FOREIGN KEY (WishRequestID) REFERENCES WishRequest (WishRequestID) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE Offer (
@@ -506,7 +543,7 @@ CREATE TABLE Message (
 -- NULL session_id signals a direct (unauthorized) DB write
 -- ============================================================
 
-DELIMITER / /
+DELIMITER //
 
 CREATE PROCEDURE sp_audit_log(
     IN p_action    VARCHAR(20),
@@ -518,7 +555,7 @@ BEGIN
     VALUES (@session_id, @current_user_id, p_action, p_table, p_target_id, 'success');
 END //
 
-DELIMITER;
+DELIMITER ;
 
 -- ============================================================
 -- AUDIT TRIGGERS - All 14 project tables
@@ -526,7 +563,7 @@ DELIMITER;
 -- BEFORE UPDATE, BEFORE DELETE
 -- ============================================================
 
-DELIMITER / /
+DELIMITER //
 
 -- Category triggers
 CREATE TRIGGER trg_category_ai AFTER INSERT ON Category FOR EACH ROW
@@ -587,6 +624,26 @@ BEGIN CALL sp_audit_log('UPDATE', 'ListingImage', OLD.ImageID); END //
 
 CREATE TRIGGER trg_listingimage_bd BEFORE DELETE ON ListingImage FOR EACH ROW
 BEGIN CALL sp_audit_log('DELETE', 'ListingImage', OLD.ImageID); END //
+
+-- WishRequestImage triggers
+CREATE TRIGGER trg_wishrequestimage_ai AFTER INSERT ON WishRequestImage FOR EACH ROW
+BEGIN CALL sp_audit_log('INSERT', 'WishRequestImage', NEW.ImageID); END //
+
+CREATE TRIGGER trg_wishrequestimage_bu BEFORE UPDATE ON WishRequestImage FOR EACH ROW
+BEGIN CALL sp_audit_log('UPDATE', 'WishRequestImage', OLD.ImageID); END //
+
+CREATE TRIGGER trg_wishrequestimage_bd BEFORE DELETE ON WishRequestImage FOR EACH ROW
+BEGIN CALL sp_audit_log('DELETE', 'WishRequestImage', OLD.ImageID); END //
+
+-- ListingWishRequest triggers
+CREATE TRIGGER trg_listingwishrequest_ai AFTER INSERT ON ListingWishRequest FOR EACH ROW
+BEGIN CALL sp_audit_log('INSERT', 'ListingWishRequest', CONCAT(NEW.ListingID, ':', NEW.WishRequestID)); END //
+
+CREATE TRIGGER trg_listingwishrequest_bu BEFORE UPDATE ON ListingWishRequest FOR EACH ROW
+BEGIN CALL sp_audit_log('UPDATE', 'ListingWishRequest', CONCAT(OLD.ListingID, ':', OLD.WishRequestID)); END //
+
+CREATE TRIGGER trg_listingwishrequest_bd BEFORE DELETE ON ListingWishRequest FOR EACH ROW
+BEGIN CALL sp_audit_log('DELETE', 'ListingWishRequest', CONCAT(OLD.ListingID, ':', OLD.WishRequestID)); END //
 
 -- Offer triggers
 CREATE TRIGGER trg_offer_ai AFTER INSERT ON Offer FOR EACH ROW
@@ -709,7 +766,7 @@ BEGIN CALL sp_audit_log('UPDATE', 'sys_user_role', CONCAT(OLD.user_id, ':', OLD.
 CREATE TRIGGER trg_sysuserrole_bd BEFORE DELETE ON sys_user_role FOR EACH ROW
 BEGIN CALL sp_audit_log('DELETE', 'sys_user_role', CONCAT(OLD.user_id, ':', OLD.role_id)); END //
 
-DELIMITER;
+DELIMITER ;
 
 -- ============================================================
 -- SEED DATA

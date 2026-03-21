@@ -25,3 +25,6 @@ CREATE INDEX idx_rating_rated            ON Rating (RatedID);
 CREATE INDEX idx_notif_recipient_read    ON Notification (RecipientID, IsRead);
 CREATE INDEX idx_session_expires         ON sys_session (is_revoked, expires_at);
 CREATE INDEX idx_wishreq_requester       ON WishRequest (RequesterID, Status);
+CREATE INDEX idx_wishreq_browse          ON WishRequest (Status, CategoryID, CreatedDate);
+CREATE INDEX idx_wishreqimg_parent_order ON WishRequestImage (WishRequestID, ImageOrder);
+CREATE INDEX idx_listingwishreq_wishreq  ON ListingWishRequest (WishRequestID, ListingID);

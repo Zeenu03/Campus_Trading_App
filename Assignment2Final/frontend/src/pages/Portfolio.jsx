@@ -266,7 +266,12 @@ export default function Portfolio() {
                   <p className="font-medium text-sm">{wr.item_description}</p>
                   <p className="text-xs text-gray-500 mt-1">{wr.status}</p>
                 </div>
-                <span className={`badge-${wr.status === 'Active' ? 'green' : 'gray'}`}>{wr.status}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`badge-${wr.status === 'Active' ? 'green' : 'gray'}`}>{wr.status}</span>
+                  <Link to={`/wishrequests/${wr.wish_request_id}`} className="btn-secondary btn-sm text-xs">
+                    View
+                  </Link>
+                </div>
               </div>
             ))}
             {wish_requests.length === 0 && <p className="text-gray-400 text-center py-8">No wish requests.</p>}

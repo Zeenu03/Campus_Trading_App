@@ -10,6 +10,9 @@ import Dashboard     from './pages/Dashboard';
 import Listings      from './pages/Listings';
 import ListingDetail from './pages/ListingDetail';
 import ListingNew    from './pages/ListingNew';
+import WishRequests  from './pages/WishRequests';
+import WishRequestNew from './pages/WishRequestNew';
+import WishRequestDetail from './pages/WishRequestDetail';
 import Portfolio     from './pages/Portfolio';
 import AdminMembers  from './pages/admin/Members';
 import AdminReports  from './pages/admin/Reports';
@@ -40,6 +43,9 @@ export default function App() {
             <Route path="listings"       element={<Listings />} />
             <Route path="listings/new"   element={<RoleRoute role="member"><ListingNew /></RoleRoute>} />
             <Route path="listings/:id"   element={<ListingDetail />} />
+            <Route path="wishrequests"   element={<WishRequests />} />
+            <Route path="wishrequests/new" element={<RoleRoute role="member"><WishRequestNew /></RoleRoute>} />
+            <Route path="wishrequests/:id" element={<WishRequestDetail />} />
             <Route path="portfolio/:id"  element={<Portfolio />} />
 
             {/* Admin routes */}

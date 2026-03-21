@@ -34,6 +34,7 @@ export default function Layout({ children = <Outlet /> }) {
               {user && (
                 <div className="hidden md:flex items-center gap-6 text-sm">
                   <Link to="/listings" className={isActive('/listings')}>Listings</Link>
+                  <Link to="/wishrequests" className={isActive('/wishrequests')}>Wish Requests</Link>
                   <Link to="/dashboard" className={isActive('/dashboard')}>Dashboard</Link>
                   {isAdmin() && (
                     <>
@@ -77,6 +78,7 @@ export default function Layout({ children = <Outlet /> }) {
       {user && (
         <div className="md:hidden bg-white border-b border-gray-100 px-4 py-2 flex gap-6 text-sm overflow-x-auto">
           <Link to="/listings" className={isActive('/listings')}>Listings</Link>
+          <Link to="/wishrequests" className={isActive('/wishrequests')}>Wish Requests</Link>
           <Link to="/dashboard" className={isActive('/dashboard')}>Dashboard</Link>
           {user.member_id && (
             <Link to={`/portfolio/${user.member_id}`} className={isActive('/portfolio')}>Portfolio</Link>

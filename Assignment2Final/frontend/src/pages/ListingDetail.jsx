@@ -484,6 +484,25 @@ export default function ListingDetail() {
               </div>
             )}
 
+            {listing.linked_wish_request && (
+              <div className="pt-3 border-t">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Fulfilled Wish Request</h3>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-gray-900">{listing.linked_wish_request.item_description}</p>
+                    <span className="badge-gray">{listing.linked_wish_request.status}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">Requested by {listing.linked_wish_request.requester_name}</p>
+                  <div className="text-xs text-gray-600">
+                    <span>{listing.linked_wish_request.category_name || 'Uncategorized'}</span>
+                    {(listing.linked_wish_request.min_budget != null || listing.linked_wish_request.max_budget != null) && (
+                      <span> • Budget: {fmtPrice(listing.linked_wish_request.min_budget)} - {fmtPrice(listing.linked_wish_request.max_budget)}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isOwn && listing.status === 'Listed' && (
               <div className="flex gap-3 pt-2 border-t">
                 <button type="button" onClick={openEditModal} className="btn-secondary btn-sm text-sm">Edit</button>
