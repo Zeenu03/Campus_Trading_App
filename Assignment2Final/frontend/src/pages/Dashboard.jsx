@@ -124,8 +124,8 @@ function MemberDashboard() {
             <Link key={listing.listing_id} to={`/listings/${listing.listing_id}`} className="card hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-medium text-gray-900 line-clamp-2 text-sm">{listing.title}</h3>
-                <span className={`badge-${listing.is_donation ? 'green' : 'blue'} ml-2 flex-shrink-0`}>
-                  {listing.is_donation ? 'Free' : `₹${listing.asking_price}`}
+                <span className="badge-blue ml-2 flex-shrink-0">
+                  ₹{listing.asking_price}
                 </span>
               </div>
               <p className="text-xs text-gray-500">{listing.category_name} • {listing.condition || 'N/A'}</p>

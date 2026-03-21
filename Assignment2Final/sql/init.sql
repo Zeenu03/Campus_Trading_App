@@ -285,7 +285,6 @@ CREATE TABLE Listing (
     Status VARCHAR(20) NOT NULL DEFAULT 'Listed',
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     LastModifiedDate DATETIME NULL,
-    IsDonation BOOLEAN NOT NULL DEFAULT FALSE,
     WishRequestID INT NULL,
     CONSTRAINT FK_Listing_Seller FOREIGN KEY (SellerID) REFERENCES Member (MemberID) ON UPDATE CASCADE,
     CONSTRAINT FK_Listing_Category FOREIGN KEY (CategoryID) REFERENCES Category (CategoryID) ON UPDATE CASCADE,
@@ -307,14 +306,7 @@ CREATE TABLE Listing (
         )
         OR `Condition` IS NULL
     ),
-    CONSTRAINT CHK_Listing_Price CHECK (AskingPrice >= 0),
-    CONSTRAINT CHK_Listing_Donation CHECK (
-        (
-            IsDonation = TRUE
-            AND AskingPrice = 0
-        )
-        OR IsDonation = FALSE
-    )
+    CONSTRAINT CHK_Listing_Price CHECK (AskingPrice >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE ListingImage (
@@ -761,8 +753,8 @@ VALUES (
     ),
     (
         15,
-        'Donations',
-        'Free items given away',
+        'Miscellaneous',
+        'Other campus items',
         1
     );
 

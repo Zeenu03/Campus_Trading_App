@@ -77,6 +77,8 @@ func main() {
 			r.Put("/members/{id}", handlers.UpdateMember)           // own|admin
 			r.Delete("/members/{id}", handlers.DeleteMember)        // admin
 
+			r.Get("/categories", handlers.ListCategories) // auth
+
 			// Listings
 			r.Get("/listings", handlers.ListListings)                    // auth
 			r.Post("/listings", handlers.CreateListing)                  // member

@@ -13,7 +13,6 @@ export default function ListingNew() {
     is_negotiable: true,
     condition: 'Good',
     category_id: '',
-    is_donation: false,
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);

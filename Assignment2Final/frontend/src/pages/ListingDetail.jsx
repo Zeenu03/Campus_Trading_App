@@ -443,10 +443,9 @@ export default function ListingDetail() {
 
             <div className="flex items-center gap-4">
               <span className="text-3xl font-bold text-blue-700">
-                {listing.is_donation ? 'FREE'
-                  : `₹${(Number.isFinite(Number(listing.asking_price)) ? Number(listing.asking_price) : 0).toLocaleString()}`}
+                ₹{(Number.isFinite(Number(listing.asking_price)) ? Number(listing.asking_price) : 0).toLocaleString()}
               </span>
-              {listing.is_negotiable && !listing.is_donation && (
+              {listing.is_negotiable && (
                 <span className="badge-yellow">Negotiable</span>
               )}
             </div>

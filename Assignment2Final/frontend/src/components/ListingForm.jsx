@@ -13,7 +13,7 @@ export const LISTING_CATEGORIES = [
   { id: 12, name: 'Room Essentials' },
   { id: 13, name: 'Gym Equipment' },
   { id: 14, name: 'Racket Sports' },
-  { id: 15, name: 'Donations' },
+  { id: 15, name: 'Miscellaneous' },
 ];
 
 const CONDITIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
@@ -22,10 +22,8 @@ export function validateListingForm(form) {
   const e = {};
   if (!form.title?.trim()) e.title = 'Title is required';
   if (!form.category_id) e.category_id = 'Category is required';
-  if (!form.is_donation) {
-    if (form.asking_price === '') e.asking_price = 'Price is required';
-    else if (parseFloat(form.asking_price) < 0) e.asking_price = 'Price must be ≥ 0';
-  }
+  if (form.asking_price === '') e.asking_price = 'Price is required';
+  else if (parseFloat(form.asking_price) < 0) e.asking_price = 'Price must be ≥ 0';
   return e;
 }
 
@@ -33,11 +31,10 @@ export function buildListingPayload(form) {
   return {
     title: form.title,
     description: form.description || null,
-    asking_price: form.is_donation ? 0 : parseFloat(form.asking_price),
+    asking_price: parseFloat(form.asking_price),
     is_negotiable: form.is_negotiable,
     condition: form.condition || null,
     category_id: parseInt(form.category_id, 10),
-    is_donation: form.is_donation,
   };
 }
 
@@ -46,11 +43,10 @@ export function listingToFormState(listing) {
   return {
     title: listing.title || '',
     description: listing.description ?? '',
-    asking_price: listing.is_donation ? '' : String(listing.asking_price ?? ''),
+    asking_price: String(listing.asking_price ?? ''),
     is_negotiable: Boolean(listing.is_negotiable),
     condition: listing.condition || 'Good',
     category_id: listing.category_id != null ? String(listing.category_id) : '',
-    is_donation: Boolean(listing.is_donation),
   };
 }
 
@@ -125,25 +121,12 @@ export default function ListingForm({
       </div>
 
       <div>
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <label className="label mb-0">Asking Price (₹) <span className="text-red-500">*</span></label>
-          <label className="flex items-center gap-1 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              name="is_donation"
-              checked={form.is_donation}
-              onChange={onChange}
-              className="w-4 h-4"
-            />
-            <span className="text-gray-600">Free / Donation</span>
-          </label>
-        </div>
+        <label className="label">Asking Price (₹) <span className="text-red-500">*</span></label>
         <input
           type="number"
           name="asking_price"
-          value={form.is_donation ? '0' : form.asking_price}
+          value={form.asking_price}
           onChange={onChange}
-          disabled={form.is_donation}
           className={`input ${errors.asking_price ? 'border-red-400' : ''}`}
           placeholder="0.00"
           min="0"

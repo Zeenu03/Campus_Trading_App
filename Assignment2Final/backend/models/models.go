@@ -89,7 +89,6 @@ type Listing struct {
 	Status                  string     `json:"status"`
 	CreatedDate             time.Time  `json:"created_date"`
 	LastModifiedDate        *time.Time `json:"last_modified_date"`
-	IsDonation              bool       `json:"is_donation"`
 	WishRequestID           *int       `json:"wish_request_id"`
 	Images                  []ListingImage `json:"images,omitempty"`
 	WatcherCount            int        `json:"watcher_count"`

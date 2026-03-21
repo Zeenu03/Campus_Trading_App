@@ -271,7 +271,6 @@ func Me(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := mw.GetUserID(ctx)
 	roles := mw.GetRoles(ctx)
-
 	if userID == 0 {
 		respondError(w, http.StatusUnauthorized, "not authenticated")
 		return

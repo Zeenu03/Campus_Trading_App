@@ -39,10 +39,11 @@ var (
 func ListListings(w http.ResponseWriter, r *http.Request) {
 	page := queryInt(r, "page", 1)
 	pageSize := queryInt(r, "page_size", 20)
-	category := r.URL.Query().Get("category")
 	status := r.URL.Query().Get("status")
-	condition := r.URL.Query().Get("condition")
-	sort := r.URL.Query().Get("sort") // price_asc, price_desc, newest
+	sort := r.URL.Query().Get("sort") // newest, oldest, price_asc, price_desc
+	titleQ := strings.TrimSpace(r.URL.Query().Get("q"))
+	minPriceStr := strings.TrimSpace(r.URL.Query().Get("min_price"))
+	maxPriceStr := strings.TrimSpace(r.URL.Query().Get("max_price"))
 
 	if status == "" {
 		status = "Listed"
@@ -51,13 +52,38 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 	baseWhere := " WHERE l.Status = ?"
 	args := []interface{}{status}
 
-	if category != "" {
-		baseWhere += " AND l.CategoryID = ?"
-		args = append(args, category)
+	if titleQ != "" {
+		baseWhere += " AND l.Title LIKE ?"
+		args = append(args, "%"+titleQ+"%")
 	}
-	if condition != "" {
-		baseWhere += " AND l.Condition = ?"
-		args = append(args, condition)
+	if minPriceStr != "" {
+		if v, err := strconv.ParseFloat(minPriceStr, 64); err == nil {
+			baseWhere += " AND l.AskingPrice >= ?"
+			args = append(args, v)
+		}
+	}
+	if maxPriceStr != "" {
+		if v, err := strconv.ParseFloat(maxPriceStr, 64); err == nil {
+			baseWhere += " AND l.AskingPrice <= ?"
+			args = append(args, v)
+		}
+	}
+
+	legacyCat := strings.TrimSpace(r.URL.Query().Get("category"))
+	catIDs := listingFilterCategoryIDs(r.URL.Query()["category_id"], legacyCat)
+	if len(catIDs) > 0 {
+		baseWhere += " AND l.CategoryID IN (" + strings.Repeat("?,", len(catIDs)-1) + "?)"
+		for _, id := range catIDs {
+			args = append(args, id)
+		}
+	}
+
+	conds := listingFilterConditions(r.URL.Query()["condition"])
+	if len(conds) > 0 {
+		baseWhere += " AND l.Condition IN (" + strings.Repeat("?,", len(conds)-1) + "?)"
+		for _, c := range conds {
+			args = append(args, c)
+		}
 	}
 
 	var total int
@@ -68,6 +94,8 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 
 	orderBy := " ORDER BY l.CreatedDate DESC"
 	switch sort {
+	case "oldest":
+		orderBy = " ORDER BY l.CreatedDate ASC"
 	case "price_asc":
 		orderBy = " ORDER BY l.AskingPrice ASC"
 	case "price_desc":
@@ -76,7 +104,7 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 
 	query := `SELECT l.ListingID, l.SellerID, m.Name, l.CategoryID, c.CategoryName,
                l.Title, l.AskingPrice, l.IsNegotiable, l.Condition, l.Status,
-               l.CreatedDate, l.IsDonation
+               l.CreatedDate
               FROM Listing l
               JOIN Member m ON m.MemberID = l.SellerID
               JOIN Category c ON c.CategoryID = l.CategoryID` +
@@ -96,7 +124,7 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 		var cond *string
 		if err := rows.Scan(&l.ListingID, &l.SellerID, &l.SellerName, &l.CategoryID, &l.CategoryName,
 			&l.Title, &l.AskingPrice, &l.IsNegotiable, &cond, &l.Status,
-			&l.CreatedDate, &l.IsDonation); err != nil {
+			&l.CreatedDate); err != nil {
 			continue
 		}
 		l.Condition = cond
@@ -126,7 +154,6 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 		AskingPrice   float64 `json:"asking_price"`
 		IsNegotiable  bool    `json:"is_negotiable"`
 		Condition     *string `json:"condition"`
-		IsDonation    bool    `json:"is_donation"`
 		WishRequestID *int    `json:"wish_request_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -141,11 +168,6 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "asking_price must be >= 0")
 		return
 	}
-	if body.IsDonation && body.AskingPrice != 0 {
-		respondError(w, http.StatusBadRequest, "donation listing must have price 0")
-		return
-	}
-
 	// Enforce: max 2 active listings if 0 completed transactions
 	var completedTx int
 	_ = appdb.DB.QueryRowContext(ctx,
@@ -174,9 +196,9 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 
 	res, err := tx.ExecContext(ctx,
 		"INSERT INTO Listing (SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable, "+
-			"`Condition`, IsDonation, WishRequestID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"`Condition`, WishRequestID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		memberID, body.CategoryID, body.Title, body.Description, body.AskingPrice, body.IsNegotiable,
-		body.Condition, body.IsDonation, body.WishRequestID,
+		body.Condition, body.WishRequestID,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "listing creation failed: "+err.Error())
@@ -203,7 +225,7 @@ func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*m
 		`SELECT l.ListingID, l.SellerID, m.Name, l.CategoryID, c.CategoryName,
              l.Title, l.Description, l.AskingPrice, l.IsNegotiable, l.Condition,
              l.Status, l.CreatedDate, l.LastModifiedDate,
-             l.IsDonation, l.WishRequestID
+             l.WishRequestID
           FROM Listing l
           JOIN Member m ON m.MemberID = l.SellerID
           JOIN Category c ON c.CategoryID = l.CategoryID
@@ -211,7 +233,7 @@ func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*m
 	).Scan(&l.ListingID, &l.SellerID, &l.SellerName, &l.CategoryID, &l.CategoryName,
 		&l.Title, &desc, &l.AskingPrice, &l.IsNegotiable, &cond,
 		&l.Status, &l.CreatedDate, &lastMod,
-		&l.IsDonation, &wishReqID)
+		&wishReqID)
 	if err != nil {
 		return nil, err
 	}
@@ -326,14 +348,13 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		IsNegotiable bool
 		Condition    sql.NullString
 		CategoryID   int
-		IsDonation   bool
 		Status       string
 	}
 	err = appdb.DB.QueryRowContext(ctx,
-		"SELECT Title, Description, AskingPrice, IsNegotiable, `Condition`, CategoryID, IsDonation, Status "+
+		"SELECT Title, Description, AskingPrice, IsNegotiable, `Condition`, CategoryID, Status "+
 			"FROM Listing WHERE ListingID = ?", listingID,
 	).Scan(&cur.Title, &cur.Description, &cur.AskingPrice, &cur.IsNegotiable,
-		&cur.Condition, &cur.CategoryID, &cur.IsDonation, &cur.Status)
+		&cur.Condition, &cur.CategoryID, &cur.Status)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "listing not found")
 		return
@@ -343,18 +364,8 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Donation requires price 0: if turning on donation without asking_price, force 0 in the patch.
-	if v, ok := body["is_donation"]; ok {
-		if b, err := jsonToBool(v); err == nil && b {
-			if _, has := body["asking_price"]; !has {
-				body["asking_price"] = float64(0)
-			}
-		}
-	}
-
 	nextPrice := cur.AskingPrice
 	nextCat := cur.CategoryID
-	nextDon := cur.IsDonation
 
 	patch := make(map[string]interface{})
 
@@ -445,16 +456,6 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		patch["category_id"] = cid
 	}
 
-	if v, ok := body["is_donation"]; ok {
-		b, err := jsonToBool(v)
-		if err != nil {
-			respondError(w, http.StatusBadRequest, "invalid is_donation")
-			return
-		}
-		nextDon = b
-		patch["is_donation"] = b
-	}
-
 	if v, ok := body["status"]; ok {
 		s, ok := v.(string)
 		if !ok {
@@ -473,10 +474,6 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "asking_price must be >= 0")
 		return
 	}
-	if nextDon && nextPrice != 0 {
-		respondError(w, http.StatusBadRequest, "donation listing must have asking_price 0")
-		return
-	}
 	if nextCat <= 0 {
 		respondError(w, http.StatusBadRequest, "invalid category_id")
 		return
@@ -488,7 +485,7 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 	colMap := map[string]string{
 		"title": "Title", "description": "Description", "asking_price": "AskingPrice",
 		"is_negotiable": "IsNegotiable", "condition": "`Condition`",
-		"status": "Status", "category_id": "CategoryID", "is_donation": "IsDonation",
+		"status": "Status", "category_id": "CategoryID",
 	}
 	for jsonKey, col := range colMap {
 		if v, ok := patch[jsonKey]; ok {
@@ -804,6 +801,52 @@ func DeleteListingImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"message": "image removed"})
+}
+
+func listingFilterCategoryIDs(fromQuery []string, legacy string) []int {
+	var raw []string
+	raw = append(raw, fromQuery...)
+	if strings.TrimSpace(legacy) != "" {
+		raw = append(raw, legacy)
+	}
+	seen := map[int]struct{}{}
+	var out []int
+	for _, s := range raw {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		id, err := strconv.Atoi(s)
+		if err != nil || id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func listingFilterConditions(fromQuery []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, c := range fromQuery {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if _, ok := allowedListingConditions[c]; !ok {
+			continue
+		}
+		if _, dup := seen[c]; dup {
+			continue
+		}
+		seen[c] = struct{}{}
+		out = append(out, c)
+	}
+	return out
 }
 
 func join(s []string, sep string) string {

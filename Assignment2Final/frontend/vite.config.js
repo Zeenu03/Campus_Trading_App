@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: true, // listen on 0.0.0.0 — reachable from LAN (see terminal for URLs)
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

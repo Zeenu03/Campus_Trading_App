@@ -7,6 +7,23 @@ export function uploadsUrl(path) {
   return API_ORIGIN + (path.startsWith('/') ? path : '/' + path);
 }
 
+/** Build query string; array values become repeated keys (e.g. category_id=1&category_id=2). */
+function serializeQueryParams(params) {
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item === undefined || item === null || item === '') continue;
+        usp.append(key, String(item));
+      }
+    } else {
+      usp.append(key, String(value));
+    }
+  }
+  return usp.toString();
+}
+
 async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const isFormData = options.body instanceof FormData;
@@ -38,7 +55,7 @@ async function request(path, options = {}) {
 export const api = {
   get:    (path, params) => {
     const url = params
-      ? path + '?' + new URLSearchParams(params).toString()
+      ? path + '?' + serializeQueryParams(params)
       : path;
     return request(url);
   },

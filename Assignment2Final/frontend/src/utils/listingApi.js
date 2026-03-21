@@ -82,7 +82,6 @@ export function normalizeListingPayload(l) {
     seller_name: l.seller_name ?? '',
     category_name: l.category_name ?? '',
     is_negotiable: Boolean(l.is_negotiable),
-    is_donation: Boolean(l.is_donation),
     images: Array.isArray(l.images) ? l.images : [],
     watcher_count: typeof l.watcher_count === 'number' ? l.watcher_count : 0,
     my_watchlist_id: l.my_watchlist_id != null ? Number(l.my_watchlist_id) : null,
