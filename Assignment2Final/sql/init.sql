@@ -10,6 +10,9 @@ CREATE DATABASE IF NOT EXISTS CampusTradingB CHARACTER SET utf8mb4 COLLATE utf8m
 
 USE CampusTradingB;
 
+-- Use IST (Indian Standard Time = UTC+05:30) for all session-level timestamps
+SET time_zone = '+05:30';
+
 -- Drop triggers before tables
 DROP TRIGGER IF EXISTS trg_message_ai;
 
@@ -330,6 +333,7 @@ CREATE TABLE Offer (
     ListingID INT NOT NULL,
     BuyerID INT NOT NULL,
     OfferedPrice DECIMAL(10, 2) NOT NULL,
+    SellerAskingPrice DECIMAL(10, 2) NULL,
     AgreedPrice DECIMAL(10, 2) NULL,
     OfferStatus VARCHAR(20) NOT NULL DEFAULT 'Submitted',
     Reason VARCHAR(1000) NULL,
@@ -356,10 +360,7 @@ CREATE TABLE `Transaction` (
     BuyerID INT NOT NULL,
     OfferID INT NULL,
     AgreedPrice DECIMAL(10, 2) NOT NULL,
-    TransactionDate DATETIME NULL,
-    SellerConfirmed BOOLEAN NOT NULL DEFAULT FALSE,
-    BuyerConfirmed BOOLEAN NOT NULL DEFAULT FALSE,
-    Status VARCHAR(20) NOT NULL DEFAULT 'Scheduled',
+    Status VARCHAR(20) NOT NULL DEFAULT 'Accepted',
     Reason VARCHAR(1000) NULL,
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT FK_Transaction_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID),
@@ -368,9 +369,9 @@ CREATE TABLE `Transaction` (
     CONSTRAINT FK_Transaction_Offer FOREIGN KEY (OfferID) REFERENCES Offer (OfferID),
     CONSTRAINT CHK_Transaction_Status CHECK (
         Status IN (
-            'Scheduled',
-            'Completed',
-            'Cancelled'
+            'Accepted',
+            'Declined',
+            'Withdrawn'
         )
     ),
     CONSTRAINT CHK_Transaction_Price CHECK (AgreedPrice >= 0),

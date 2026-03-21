@@ -14,10 +14,6 @@ export const updateOfferPrice = (offerId, price) =>
 export const buyerAcceptOffer = (offerId) =>
   api.put(`/offers/${offerId}/buyer-accept`, {});
 
-/** Buyer declines the offer (reason required). */
-export const buyerDeclineOffer = (offerId, reason) =>
-  api.put(`/offers/${offerId}/buyer-decline`, { reason });
-
 /** Buyer withdraws their submitted offer (reason required). */
 export const withdrawOffer = (offerId, reason) =>
   api.put(`/offers/${offerId}/withdraw`, { reason });

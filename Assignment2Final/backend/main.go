@@ -93,8 +93,8 @@ func main() {
 			r.Put("/offers/{id}/decline", handlers.DeclineOffer)                // own-seller
 			r.Put("/offers/{id}/withdraw", handlers.WithdrawOffer)              // own-buyer
 			r.Put("/offers/{id}/price", handlers.UpdateOfferPrice)              // own-buyer
-			r.Put("/offers/{id}/buyer-accept", handlers.BuyerAcceptOffer)       // own-buyer
-			r.Put("/offers/{id}/buyer-decline", handlers.BuyerDeclineOffer)     // own-buyer
+			r.Put("/offers/{id}/buyer-accept", handlers.BuyerAcceptOffer)       // own-buyer (syncs price to asking, does NOT finalise)
+			r.Put("/offers/{id}/seller-price", handlers.UpdateSellerAskingPrice) // own-seller (per-offer counter price)
 
 			// Threads & Messages
 			r.Get("/listings/{id}/my-thread", handlers.GetMyThread)             // own-buyer
@@ -104,9 +104,8 @@ func main() {
 			r.Post("/threads/{id}/messages", handlers.SendMessage)              // buyer|seller
 
 			// Transactions
-			r.Get("/transactions", handlers.ListTransactions)                // auth
-			r.Put("/transactions/{id}/confirm", handlers.ConfirmTransaction) // own-party
-			r.Post("/transactions/{id}/rate", handlers.RateTransaction)      // own-party
+			r.Get("/transactions", handlers.ListTransactions)           // auth
+			r.Post("/transactions/{id}/rate", handlers.RateTransaction) // own-party (Accepted only)
 
 			// Wish Requests
 			r.Get("/wishrequests", handlers.ListWishRequests)       // auth

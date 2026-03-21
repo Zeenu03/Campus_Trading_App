@@ -215,21 +215,24 @@ export default function ListingDetail() {
     }
   };
 
+  // Effective asking price for the buyer = seller's per-offer price if set, else global listing price
+  const effectiveAskingPrice = myOffer?.seller_asking_price ?? listing.asking_price;
+
   const handleBuyerAccept = async () => {
-    if (!confirm(`Accept the asking price of ${fmtPrice(listing.asking_price)}?`)) return;
+    if (!confirm(`Match your offer to the asking price of ${fmtPrice(effectiveAskingPrice)}? The seller will still need to accept.`)) return;
     try {
       await api.put(`/offers/${myOffer.offer_id}/buyer-accept`, {});
-      toast.success('You accepted the asking price!');
-      await loadListing();
+      toast.success(`Your offer updated to ${fmtPrice(effectiveAskingPrice)} — waiting for seller to accept.`);
       const fresh = await api.get(`/listings/${id}/my-offer`);
       setMyOffer(fresh || null);
+      if (fresh?.offered_price != null) setUpdatePriceVal(String(fresh.offered_price));
+      if (isOwn) {
+        const data = await api.get(`/listings/${id}/interactions`);
+        setInteractions(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
       toast.error(err.message);
     }
-  };
-
-  const handleBuyerDecline = () => {
-    setReasonModal({ title: 'Decline Offer', action: 'buyer-decline' });
   };
 
   const handleWithdrawOffer = () => {
@@ -240,9 +243,12 @@ export default function ListingDetail() {
     setReasonLoading(true);
     try {
       const action = reasonModal.action;
-      if (action === 'buyer-decline') {
-        await api.put(`/offers/${myOffer.offer_id}/buyer-decline`, { reason });
-        toast.success('Offer declined');
+      if (action === 'withdraw-listing') {
+        await api.delete(`/listings/${id}`, { reason });
+        toast.success('Listing withdrawn');
+        setReasonModal(null);
+        navigate('/listings');
+        return;
       } else if (action === 'withdraw') {
         await api.put(`/offers/${myOffer.offer_id}/withdraw`, { reason });
         toast.success('Offer withdrawn');
@@ -262,7 +268,7 @@ export default function ListingDetail() {
           .finally(() => setInteractionsLoading(false));
       }
       setReasonModal(null);
-      if (action === 'buyer-decline' || action === 'withdraw') {
+      if (action === 'withdraw') {
         await loadListing();
         const fresh = await api.get(`/listings/${id}/my-offer`);
         setMyOffer(fresh || null);
@@ -291,15 +297,8 @@ export default function ListingDetail() {
     setReasonModal({ title: 'Decline this offer', action: 'seller-decline', offerId });
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Withdraw this listing?')) return;
-    try {
-      await api.delete(`/listings/${id}`);
-      toast.success('Listing withdrawn');
-      navigate('/listings');
-    } catch (err) {
-      toast.error(err.message);
-    }
+  const handleDelete = () => {
+    setReasonModal({ title: 'Withdraw Listing', action: 'withdraw-listing' });
   };
 
   const handleWatchToggle = async () => {
@@ -415,7 +414,7 @@ export default function ListingDetail() {
                     ))}
                   </div>
                 )}
-                {isOwn && (
+                {isOwn && listing.status === 'Listed' && (
                   <div className="p-3 border-t">
                     <ImageManager listing={listing} onUpdate={setListing} />
                   </div>
@@ -426,7 +425,7 @@ export default function ListingDetail() {
                 <div className="aspect-video bg-gray-100 flex items-center justify-center text-gray-400">
                   <p>No images</p>
                 </div>
-                {isOwn && (
+                {isOwn && listing.status === 'Listed' && (
                   <div className="p-3 border-t">
                     <ImageManager listing={listing} onUpdate={setListing} />
                   </div>
@@ -469,7 +468,7 @@ export default function ListingDetail() {
               </div>
             )}
 
-            {isOwn && (
+            {isOwn && listing.status === 'Listed' && (
               <div className="flex gap-3 pt-2 border-t">
                 <button type="button" onClick={openEditModal} className="btn-secondary btn-sm text-sm">Edit</button>
                 <button type="button" onClick={handleDelete} className="btn-danger btn-sm text-sm">Withdraw</button>
@@ -532,7 +531,12 @@ export default function ListingDetail() {
 
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Asking price:</span>
-                    <span className="font-medium">{fmtPrice(listing.asking_price)}</span>
+                    <span className="font-medium">
+                      {fmtPrice(effectiveAskingPrice)}
+                      {myOffer?.seller_asking_price != null && myOffer.seller_asking_price !== listing.asking_price && (
+                        <span className="ml-1 text-xs text-gray-400">(seller's counter)</span>
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Your offer:</span>
@@ -560,24 +564,18 @@ export default function ListingDetail() {
                     </button>
                   </div>
 
-                  {/* Accept asking price */}
+                  {/* Match offered price to seller's asking price */}
                   <button
                     type="button"
                     className="btn-primary w-full text-sm"
                     onClick={handleBuyerAccept}
+                    disabled={myOffer?.offered_price === effectiveAskingPrice}
                   >
-                    ✓ Accept Asking Price ({fmtPrice(listing.asking_price)})
+                    ↑ Match Asking Price ({fmtPrice(effectiveAskingPrice)})
                   </button>
 
-                  {/* Buyer decline / withdraw */}
+                  {/* Buyer withdraw */}
                   <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="btn-danger flex-1 text-sm"
-                      onClick={handleBuyerDecline}
-                    >
-                      Decline
-                    </button>
                     <button
                       type="button"
                       className="btn-danger flex-1 text-sm"
@@ -672,57 +670,84 @@ export default function ListingDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 border-b text-xs uppercase tracking-wide">
-                    <th className="pb-2 pr-4">Buyer</th>
-                    <th className="pb-2 pr-4">Asked Price</th>
-                    <th className="pb-2 pr-4">Offered Price</th>
-                    <th className="pb-2 pr-4">Status</th>
-                    <th className="pb-2 pr-4">Last Message</th>
+                    <th className="pb-2 pr-3">Buyer</th>
+                    <th className="pb-2 pr-3">Your Asking Price</th>
+                    <th className="pb-2 pr-3">Offered Price</th>
+                    <th className="pb-2 pr-3">Status</th>
+                    <th className="pb-2 pr-3">Last Message</th>
                     <th className="pb-2">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {interactions.map((row) => {
                     const isAccepted  = row.offer_status === 'Accepted';
                     const isClosed    = row.offer_status && row.offer_status !== 'Submitted';
-                    const rowBg = isAccepted
-                      ? 'bg-green-50'
-                      : isClosed
-                        ? 'bg-red-50'
-                        : '';
+                    // Effective asking price for this row
+                    const effectiveAsk = row.seller_asking_price ?? row.asking_price;
+                    // Prices match when both are set and equal (within rounding)
+                    const pricesMatch = row.offered_price != null &&
+                      Math.abs(row.offered_price - effectiveAsk) < 0.001;
+
+                    const rowClass = [
+                      'border-b border-gray-100',
+                      isAccepted  ? 'bg-green-50' : '',
+                      isClosed && !isAccepted ? 'bg-red-50' : '',
+                      pricesMatch && !isClosed ? 'ring-2 ring-inset ring-green-400 bg-green-50/60' : '',
+                    ].filter(Boolean).join(' ');
 
                     return (
-                      <tr key={row.thread_id} className={rowBg}>
-                        <td className="py-3 pr-4 font-medium text-gray-900">{row.buyer_name}</td>
-                        <td className="py-3 pr-4 text-gray-700">{fmtPrice(row.asking_price)}</td>
-                        <td className="py-3 pr-4 text-gray-700">
-                          {row.offered_price != null ? fmtPrice(row.offered_price) : <span className="text-gray-400">—</span>}
+                      <tr key={row.thread_id} className={rowClass}>
+                        <td className="py-3 pr-3 font-medium text-gray-900 whitespace-nowrap">{row.buyer_name}</td>
+
+                        {/* Editable per-offer asking price — only for Submitted offers */}
+                        <td className="py-3 pr-3">
+                          {row.offer_status === 'Submitted' ? (
+                            <SellerAskingPriceCell
+                              offerId={row.offer_id}
+                              initial={effectiveAsk}
+                              onSaved={(newPrice) => {
+                                setInteractions(prev => prev.map(r =>
+                                  r.thread_id === row.thread_id
+                                    ? { ...r, seller_asking_price: newPrice }
+                                    : r
+                                ));
+                              }}
+                            />
+                          ) : (
+                            <span className="text-gray-700">{fmtPrice(effectiveAsk)}</span>
+                          )}
                         </td>
-                        <td className="py-3 pr-4">
+
+                        <td className="py-3 pr-3 text-gray-700 whitespace-nowrap">
+                          {row.offered_price != null
+                            ? <span className={pricesMatch && !isClosed ? 'font-semibold text-green-700' : ''}>{fmtPrice(row.offered_price)}</span>
+                            : <span className="text-gray-400">—</span>}
+                        </td>
+
+                        <td className="py-3 pr-3">
                           {row.offer_status ? (
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${OFFER_STATUS_COLORS[row.offer_status] || ''}`}>
-                              {row.offer_status}
+                              {pricesMatch && row.offer_status === 'Submitted' ? '✓ Match' : row.offer_status}
                             </span>
                           ) : (
                             <span className="text-xs text-gray-400">Chat only</span>
                           )}
                           {row.offer_reason && (
-                            <p className="text-xs text-gray-500 mt-1 max-w-[12rem] truncate" title={row.offer_reason}>
+                            <p className="text-xs text-gray-500 mt-1 max-w-[10rem] truncate" title={row.offer_reason}>
                               "{row.offer_reason}"
                             </p>
                           )}
                         </td>
-                        <td className="py-3 pr-4 text-gray-500 max-w-[10rem] truncate">
+
+                        <td className="py-3 pr-3 text-gray-500 max-w-[8rem] truncate">
                           {row.last_message_preview || <span className="text-gray-300">—</span>}
                         </td>
+
                         <td className="py-3">
                           <div className="flex flex-wrap gap-2">
-                            {/* Chat button */}
-                            <SellerChatButton
-                              threadId={row.thread_id}
-                              currentUserId={user?.member_id}
-                            />
-                            {/* Offer actions — only when Submitted */}
-                            {row.offer_status === 'Submitted' && (
+                            <SellerChatButton threadId={row.thread_id} currentUserId={user?.member_id} />
+                            {/* Accept/Decline only visible when prices match */}
+                            {pricesMatch && row.offer_status === 'Submitted' && (
                               <>
                                 <button
                                   type="button"
@@ -788,6 +813,56 @@ export default function ListingDetail() {
           onClose={() => !reasonLoading && setReasonModal(null)}
           loading={reasonLoading}
         />
+      )}
+    </div>
+  );
+}
+
+// Inline editable asking-price cell for a single offer row in the seller's interactions table
+function SellerAskingPriceCell({ offerId, initial, onSaved }) {
+  const [val, setVal] = useState(String(initial ?? ''));
+  const [saving, setSaving] = useState(false);
+
+  // Keep in sync if parent refreshes
+  const initialStr = String(initial ?? '');
+  const isDirty = val !== initialStr && val !== '';
+
+  const handleSave = async () => {
+    const price = parseFloat(val);
+    if (!price || price <= 0) return;
+    setSaving(true);
+    try {
+      await api.put(`/offers/${offerId}/seller-price`, { seller_asking_price: price });
+      onSaved(price);
+    } catch {
+      // silent — row will show old value
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-gray-500 text-xs">₹</span>
+      <input
+        type="number"
+        min="0.01"
+        step="0.01"
+        className="input text-xs py-1 px-2 w-24"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={() => { if (isDirty) handleSave(); }}
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+      />
+      {isDirty && (
+        <button
+          type="button"
+          className="btn-secondary btn-sm text-xs px-2"
+          disabled={saving}
+          onClick={handleSave}
+        >
+          {saving ? '…' : 'Set'}
+        </button>
       )}
     </div>
   );

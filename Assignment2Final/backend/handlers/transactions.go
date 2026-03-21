@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	appdb "campus-trading/db"
 	mw "campus-trading/middleware"
@@ -41,8 +40,8 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 	if mw.HasRole(ctx, "admin") {
 		query = `SELECT t.TransactionID, t.ListingID, l.Title, t.SellerID, ms.Name,
-                     t.BuyerID, mb.Name, t.OfferID, t.AgreedPrice, t.TransactionDate,
-                     t.SellerConfirmed, t.BuyerConfirmed, t.Status, t.CreatedDate
+                     t.BuyerID, mb.Name, t.OfferID, t.AgreedPrice,
+                     t.Status, t.Reason, t.CreatedDate
                   FROM Transaction t
                   JOIN Listing l ON l.ListingID = t.ListingID
                   JOIN Member ms ON ms.MemberID = t.SellerID
@@ -51,8 +50,8 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 		args = []interface{}{pageSize, offset}
 	} else {
 		query = `SELECT t.TransactionID, t.ListingID, l.Title, t.SellerID, ms.Name,
-                     t.BuyerID, mb.Name, t.OfferID, t.AgreedPrice, t.TransactionDate,
-                     t.SellerConfirmed, t.BuyerConfirmed, t.Status, t.CreatedDate
+                     t.BuyerID, mb.Name, t.OfferID, t.AgreedPrice,
+                     t.Status, t.Reason, t.CreatedDate
                   FROM Transaction t
                   JOIN Listing l ON l.ListingID = t.ListingID
                   JOIN Member ms ON ms.MemberID = t.SellerID
@@ -72,14 +71,12 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		var txDate *time.Time
 		var offerID *int
 		_ = rows.Scan(&t.TransactionID, &t.ListingID, &t.ListingTitle,
 			&t.SellerID, &t.SellerName, &t.BuyerID, &t.BuyerName,
-			&offerID, &t.AgreedPrice, &txDate,
-			&t.SellerConfirmed, &t.BuyerConfirmed, &t.Status, &t.CreatedDate)
+			&offerID, &t.AgreedPrice,
+			&t.Status, &t.Reason, &t.CreatedDate)
 		t.OfferID = offerID
-		t.TransactionDate = txDate
 		txs = append(txs, t)
 	}
 	if txs == nil {
@@ -90,78 +87,7 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PUT /api/v1/transactions/:id/confirm — own party (seller or buyer)
-func ConfirmTransaction(w http.ResponseWriter, r *http.Request) {
-	txID, err := urlParamInt(r, "id")
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid transaction id")
-		return
-	}
-	ctx := r.Context()
-	memberID := mw.GetMemberID(ctx)
-
-	var sellerID, buyerID int
-	var sellerConfirmed, buyerConfirmed bool
-	var status string
-	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT SellerID, BuyerID, SellerConfirmed, BuyerConfirmed, Status FROM Transaction WHERE TransactionID = ?`, txID,
-	).Scan(&sellerID, &buyerID, &sellerConfirmed, &buyerConfirmed, &status)
-	if err == sql.ErrNoRows {
-		respondError(w, http.StatusNotFound, "transaction not found")
-		return
-	}
-	if status != "Scheduled" {
-		respondError(w, http.StatusConflict, "transaction is not in Scheduled status")
-		return
-	}
-	if memberID != sellerID && memberID != buyerID && !mw.HasRole(ctx, "admin") {
-		mw.RespondForbidden(w)
-		return
-	}
-
-	tx, err := appdb.DB.BeginTx(ctx, nil)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "tx failed")
-		return
-	}
-	defer tx.Rollback()
-	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
-
-	if memberID == sellerID {
-		_, _ = tx.ExecContext(ctx, `UPDATE Transaction SET SellerConfirmed = TRUE WHERE TransactionID = ?`, txID)
-		sellerConfirmed = true
-	} else {
-		_, _ = tx.ExecContext(ctx, `UPDATE Transaction SET BuyerConfirmed = TRUE WHERE TransactionID = ?`, txID)
-		buyerConfirmed = true
-	}
-
-	// Both confirmed → mark Completed
-	if sellerConfirmed && buyerConfirmed {
-		_, _ = tx.ExecContext(ctx,
-			`UPDATE Transaction SET Status = 'Completed', TransactionDate = NOW() WHERE TransactionID = ?`, txID)
-
-		// Get listingID, mark sold, and clear watchlist
-		var listingID int
-		_ = tx.QueryRowContext(ctx, `SELECT ListingID FROM Transaction WHERE TransactionID = ?`, txID).Scan(&listingID)
-		_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Sold', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
-		_, _ = tx.ExecContext(ctx, `DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
-
-		// Notify both parties
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedTransactionID)
-             VALUES (?, 'TransactionCompleted', 'Transaction Completed', 'Your transaction is complete. Please rate the other party.', ?)`,
-			sellerID, txID)
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedTransactionID)
-             VALUES (?, 'TransactionCompleted', 'Transaction Completed', 'Your transaction is complete. Please rate the other party.', ?)`,
-			buyerID, txID)
-	}
-
-	_ = tx.Commit()
-	respondJSON(w, http.StatusOK, map[string]string{"message": "confirmation recorded"})
-}
-
-// POST /api/v1/transactions/:id/rate — own party, only when Completed
+// POST /api/v1/transactions/:id/rate — own party, only when Accepted
 func RateTransaction(w http.ResponseWriter, r *http.Request) {
 	txID, err := urlParamInt(r, "id")
 	if err != nil {
@@ -180,8 +106,8 @@ func RateTransaction(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "transaction not found")
 		return
 	}
-	if status != "Completed" {
-		respondError(w, http.StatusConflict, "can only rate completed transactions")
+	if status != "Accepted" {
+		respondError(w, http.StatusConflict, "can only rate accepted transactions")
 		return
 	}
 	if memberID != sellerID && memberID != buyerID {
@@ -202,7 +128,6 @@ func RateTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine who is being rated
 	var ratedID int
 	if memberID == sellerID {
 		ratedID = buyerID
@@ -231,7 +156,6 @@ func RateTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 	ratingID, _ := res.LastInsertId()
 
-	// Notify rated party
 	_, _ = tx.ExecContext(ctx,
 		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedTransactionID)
          VALUES (?, 'RatingReceived', 'New Rating', CONCAT('You received a ', ?, '-star rating'), ?)`,

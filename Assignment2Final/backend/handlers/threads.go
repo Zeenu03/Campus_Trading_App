@@ -135,6 +135,7 @@ func ListInteractions(w http.ResponseWriter, r *http.Request) {
             mb.Name                                          AS BuyerName,
             mt.OfferID,
             o.OfferedPrice,
+            o.SellerAskingPrice,
             o.AgreedPrice,
             o.OfferStatus,
             o.Reason                                         AS OfferReason,
@@ -161,7 +162,8 @@ func ListInteractions(w http.ResponseWriter, r *http.Request) {
 		var it models.MessageThread
 		_ = rows.Scan(
 			&it.ThreadID, &it.ListingID, &it.BuyerID, &it.BuyerName,
-			&it.OfferID, &it.OfferedPrice, &it.AgreedPrice, &it.OfferStatus, &it.OfferReason,
+			&it.OfferID, &it.OfferedPrice, &it.SellerAskingPrice, &it.AgreedPrice,
+			&it.OfferStatus, &it.OfferReason,
 			&it.CreatedDate, &it.IsActive,
 			&it.LastMessagePreview,
 		)

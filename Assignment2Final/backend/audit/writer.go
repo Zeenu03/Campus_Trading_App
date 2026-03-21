@@ -42,7 +42,7 @@ func Append(sessionID, action, targetTable, targetID, ipAddress, status string, 
 	}
 
 	line := fmt.Sprintf("[%s] session=%s user_id=%d action=%s table=%s id=%s ip=%s status=%s\n",
-		time.Now().UTC().Format(time.RFC3339Nano),
+		time.Now().Format(time.RFC3339Nano),
 		sid,
 		userID,
 		action,

@@ -571,8 +571,44 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read optional reason from body
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	reason := body.Reason
+	if reason == "" {
+		reason = "Listing withdrawn by seller"
+	}
+
+	// Collect all submitted offers so we can create Declined transactions
+	type submittedOffer struct{ offerID, buyerID, sellerID int; price float64 }
+	var affectedOffers []submittedOffer
+	offerRows, err := tx.QueryContext(ctx,
+		`SELECT o.OfferID, o.BuyerID, l.SellerID, o.OfferedPrice
+         FROM Offer o JOIN Listing l ON l.ListingID = o.ListingID
+         WHERE o.ListingID = ? AND o.OfferStatus = 'Submitted'`, listingID)
+	if err == nil {
+		for offerRows.Next() {
+			var ao submittedOffer
+			_ = offerRows.Scan(&ao.offerID, &ao.buyerID, &ao.sellerID, &ao.price)
+			affectedOffers = append(affectedOffers, ao)
+		}
+		offerRows.Close()
+	}
+
 	_, _ = tx.ExecContext(ctx, `UPDATE Listing SET Status = 'Withdrawn', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
-	_, _ = tx.ExecContext(ctx, `UPDATE Offer SET OfferStatus = 'Withdrawn', ResponseDate = NOW() WHERE ListingID = ? AND OfferStatus = 'Submitted'`, listingID)
+	_, _ = tx.ExecContext(ctx,
+		`UPDATE Offer SET OfferStatus = 'Withdrawn', Reason = ?, ResponseDate = NOW()
+         WHERE ListingID = ? AND OfferStatus = 'Submitted'`, reason, listingID)
+
+	// Create a Declined transaction for each affected offer
+	for _, ao := range affectedOffers {
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
+             VALUES (?, ?, ?, ?, ?, 'Declined', ?)`,
+			listingID, ao.sellerID, ao.buyerID, ao.offerID, ao.price, reason)
+	}
 
 	if err := tx.Commit(); err != nil {
 		respondError(w, http.StatusInternalServerError, "commit failed")

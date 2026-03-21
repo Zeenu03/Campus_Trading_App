@@ -9,6 +9,12 @@ const TABS = ['listings', 'transactions', 'ratings', 'wish_requests', 'watchlist
 const TAB_LABELS = { listings: 'Listings', transactions: 'Transactions', ratings: 'Ratings',
                      wish_requests: 'Wish Requests', watchlist: 'Watchlist' };
 
+const TX_STATUS_COLORS = {
+  Accepted:  'bg-green-100 text-green-700',
+  Declined:  'bg-red-100 text-red-700',
+  Withdrawn: 'bg-yellow-100 text-yellow-700',
+};
+
 function StarRating({ stars }) {
   return (
     <span className="text-yellow-400 text-sm">
@@ -20,10 +26,13 @@ function StarRating({ stars }) {
 export default function Portfolio() {
   const { id } = useParams();
   const { user } = useAuth();
-  const [data, setData]     = useState(null);
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('listings');
-  const [txAction, setTxAction] = useState({});
+  const [ratingModal, setRatingModal] = useState(null); // { txId }
+  const [ratingStars, setRatingStars] = useState(5);
+  const [ratingText, setRatingText]   = useState('');
+  const [ratingLoading, setRatingLoading] = useState(false);
 
   const isOwn = user?.member_id && String(user.member_id) === String(id);
 
@@ -34,14 +43,23 @@ export default function Portfolio() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleConfirmTx = async (txId) => {
+  const handleRate = async () => {
+    setRatingLoading(true);
     try {
-      await api.put(`/transactions/${txId}/confirm`);
-      toast.success('Transaction confirmed!');
+      await api.post(`/transactions/${ratingModal.txId}/rate`, {
+        stars: ratingStars,
+        review_text: ratingText || null,
+      });
+      toast.success('Rating submitted!');
+      setRatingModal(null);
+      setRatingStars(5);
+      setRatingText('');
       const updated = await api.get(`/members/${id}/portfolio`);
       setData(updated);
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setRatingLoading(false);
     }
   };
 
@@ -52,6 +70,7 @@ export default function Portfolio() {
   const visibleTabs = isOwn ? TABS : TABS.filter(t => t !== 'watchlist');
 
   return (
+    <>
     <div className="space-y-6">
       {/* Member header */}
       <div className="card flex flex-col sm:flex-row items-start sm:items-center gap-6">
@@ -126,20 +145,34 @@ export default function Portfolio() {
         {activeTab === 'transactions' && (
           <div className="space-y-3">
             {transactions.map(tx => (
-              <div key={tx.transaction_id} className="card flex items-center justify-between gap-4">
-                <div>
+              <div key={tx.transaction_id}
+                className={`card flex items-start justify-between gap-4 border-l-4 ${
+                  tx.status === 'Accepted'  ? 'border-l-green-500' :
+                  tx.status === 'Withdrawn' ? 'border-l-yellow-500' : 'border-l-red-500'
+                }`}>
+                <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">{tx.listing_title}</p>
-                  <p className="text-xs text-gray-500 mt-1">₹{Number(tx.agreed_price).toLocaleString()} • {tx.status}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    ₹{Number(tx.agreed_price).toLocaleString()} •{' '}
+                    {new Date(tx.created_date).toLocaleDateString()}
+                  </p>
+                  {tx.reason && (
+                    <p className="text-xs text-gray-500 mt-1 italic">Reason: "{tx.reason}"</p>
+                  )}
                 </div>
-                {tx.status === 'Scheduled' && isOwn && (
-                  <button onClick={() => handleConfirmTx(tx.transaction_id)}
-                    className="btn-primary btn-sm text-xs">
-                    Confirm
-                  </button>
-                )}
-                {tx.status === 'Completed' && (
-                  <span className="badge-green text-xs">Completed</span>
-                )}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${TX_STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {tx.status}
+                  </span>
+                  {tx.status === 'Accepted' && isOwn && (
+                    <button
+                      onClick={() => setRatingModal({ txId: tx.transaction_id })}
+                      className="btn-primary text-xs py-1 px-3"
+                    >
+                      Rate
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             {transactions.length === 0 && <p className="text-gray-400 text-center py-8">No transactions yet.</p>}
@@ -190,5 +223,35 @@ export default function Portfolio() {
         )}
       </div>
     </div>
+
+    {/* Rating modal */}
+    {ratingModal && (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
+          <h2 className="font-semibold text-gray-800">Rate this transaction</h2>
+          <div className="flex gap-1">
+            {[1,2,3,4,5].map(s => (
+              <button key={s} onClick={() => setRatingStars(s)}
+                className={`text-2xl ${s <= ratingStars ? 'text-yellow-400' : 'text-gray-300'}`}>
+                ★
+              </button>
+            ))}
+          </div>
+          <textarea
+            className="input w-full h-20 resize-none"
+            placeholder="Write a review (optional)…"
+            value={ratingText}
+            onChange={e => setRatingText(e.target.value)}
+          />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setRatingModal(null)} className="btn-secondary text-sm">Cancel</button>
+            <button onClick={handleRate} disabled={ratingLoading} className="btn-primary text-sm">
+              {ratingLoading ? 'Submitting…' : 'Submit Rating'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

@@ -26,12 +26,12 @@ func GetMyOffer(w http.ResponseWriter, r *http.Request) {
 
 	var o models.Offer
 	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.AgreedPrice,
-             o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate
+		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.SellerAskingPrice,
+             o.AgreedPrice, o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate
           FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID
           WHERE o.ListingID = ? AND o.BuyerID = ?`, listingID, memberID,
 	).Scan(&o.OfferID, &o.ListingID, &o.BuyerID, &o.BuyerName,
-		&o.OfferedPrice, &o.AgreedPrice, &o.OfferStatus, &o.Reason,
+		&o.OfferedPrice, &o.SellerAskingPrice, &o.AgreedPrice, &o.OfferStatus, &o.Reason,
 		&o.SubmittedDate, &o.ResponseDate)
 	if err == sql.ErrNoRows {
 		respondJSON(w, http.StatusOK, nil)
@@ -67,8 +67,8 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := appdb.DB.QueryContext(ctx,
-		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.AgreedPrice,
-             o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate
+		`SELECT o.OfferID, o.ListingID, o.BuyerID, m.Name, o.OfferedPrice, o.SellerAskingPrice,
+             o.AgreedPrice, o.OfferStatus, o.Reason, o.SubmittedDate, o.ResponseDate
           FROM Offer o JOIN Member m ON m.MemberID = o.BuyerID
           WHERE o.ListingID = ? ORDER BY o.SubmittedDate DESC`, listingID)
 	if err != nil {
@@ -81,7 +81,7 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o models.Offer
 		_ = rows.Scan(&o.OfferID, &o.ListingID, &o.BuyerID, &o.BuyerName,
-			&o.OfferedPrice, &o.AgreedPrice, &o.OfferStatus, &o.Reason,
+			&o.OfferedPrice, &o.SellerAskingPrice, &o.AgreedPrice, &o.OfferStatus, &o.Reason,
 			&o.SubmittedDate, &o.ResponseDate)
 		offers = append(offers, o)
 	}
@@ -240,8 +240,24 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Gather other submitted offers before declining them
+	otherRows, _ := tx.QueryContext(ctx,
+		`SELECT OfferID, BuyerID, OfferedPrice FROM Offer
+         WHERE ListingID = ? AND OfferStatus = 'Submitted' AND OfferID != ?`,
+		listingID, offerID)
+	type otherOffer struct{ id, buyerID int; price float64 }
+	var others []otherOffer
+	if otherRows != nil {
+		for otherRows.Next() {
+			var o otherOffer
+			_ = otherRows.Scan(&o.id, &o.buyerID, &o.price)
+			others = append(others, o)
+		}
+		otherRows.Close()
+	}
+
 	_, _ = tx.ExecContext(ctx,
-		`UPDATE Offer SET OfferStatus = 'Declined', ResponseDate = NOW()
+		`UPDATE Offer SET OfferStatus = 'Declined', Reason = 'Sold to another buyer', ResponseDate = NOW()
          WHERE ListingID = ? AND OfferStatus = 'Submitted' AND OfferID != ?`,
 		listingID, offerID)
 
@@ -252,14 +268,22 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
-         VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status)
+         VALUES (?, ?, ?, ?, ?, 'Accepted')`,
 		listingID, sellerID, buyerID, offerID, offeredPrice)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "transaction creation failed")
 		return
 	}
 	txID, _ := res.LastInsertId()
+
+	// Create Declined transactions for each auto-declined offer
+	for _, o := range others {
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
+             VALUES (?, ?, ?, ?, ?, 'Declined', 'Sold to another buyer')`,
+			listingID, sellerID, o.buyerID, o.id, o.price)
+	}
 
 	_, _ = tx.ExecContext(ctx,
 		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
@@ -325,7 +349,7 @@ func DeclineOffer(w http.ResponseWriter, r *http.Request) {
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-         VALUES (?, ?, ?, ?, ?, 'Cancelled', ?)`,
+         VALUES (?, ?, ?, ?, ?, 'Declined', ?)`,
 		listingID, sellerID, buyerID, offerID, offeredPrice, body.Reason)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "transaction creation failed")
@@ -398,7 +422,7 @@ func WithdrawOffer(w http.ResponseWriter, r *http.Request) {
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-         VALUES (?, ?, ?, ?, ?, 'Cancelled', ?)`,
+         VALUES (?, ?, ?, ?, ?, 'Withdrawn', ?)`,
 		listingID, sellerID, buyerID, offerID, offeredPrice, body.Reason)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "transaction creation failed")
@@ -470,7 +494,9 @@ func UpdateOfferPrice(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"message": "offer price updated"})
 }
 
-// PUT /api/v1/offers/:id/buyer-accept — buyer accepts the seller's current asking price
+// PUT /api/v1/offers/:id/buyer-accept — buyer matches their offered price to the seller's effective asking price.
+// This does NOT finalise the deal; it just sets OfferedPrice = COALESCE(SellerAskingPrice, listing.AskingPrice)
+// so the seller can see the prices now match and choose to accept.
 func BuyerAcceptOffer(w http.ResponseWriter, r *http.Request) {
 	offerID, err := urlParamInt(r, "id")
 	if err != nil {
@@ -479,17 +505,18 @@ func BuyerAcceptOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	var listingID, buyerID, sellerID int
 	var buyerUserID int
-	var askingPrice float64
+	var effectiveAskingPrice float64
 	var offerStatus string
 	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT o.ListingID, o.BuyerID, l.SellerID, mb.user_id, l.AskingPrice, o.OfferStatus
+		`SELECT mb.user_id,
+                COALESCE(o.SellerAskingPrice, l.AskingPrice),
+                o.OfferStatus
           FROM Offer o
           JOIN Listing l ON l.ListingID = o.ListingID
           JOIN Member mb ON mb.MemberID = o.BuyerID
           WHERE o.OfferID = ?`, offerID,
-	).Scan(&listingID, &buyerID, &sellerID, &buyerUserID, &askingPrice, &offerStatus)
+	).Scan(&buyerUserID, &effectiveAskingPrice, &offerStatus)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "offer not found")
@@ -501,6 +528,75 @@ func BuyerAcceptOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	if offerStatus != "Submitted" {
 		respondError(w, http.StatusConflict, "offer is no longer active")
+		return
+	}
+
+	tx, err := appdb.DB.BeginTx(ctx, nil)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "tx failed")
+		return
+	}
+	defer tx.Rollback()
+	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
+
+	// Simply match the buyer's offered price to the effective asking price —
+	// the seller must still click Accept to finalise the deal.
+	_, err = tx.ExecContext(ctx,
+		`UPDATE Offer SET OfferedPrice = ? WHERE OfferID = ? AND OfferStatus = 'Submitted'`,
+		effectiveAskingPrice, offerID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+
+	_ = tx.Commit()
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"offered_price": effectiveAskingPrice,
+		"message":       "your offered price has been updated to match the asking price",
+	})
+}
+
+// PUT /api/v1/offers/:id/seller-price — seller sets a custom asking price for this specific offer negotiation
+func UpdateSellerAskingPrice(w http.ResponseWriter, r *http.Request) {
+	offerID, err := urlParamInt(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid offer id")
+		return
+	}
+	ctx := r.Context()
+
+	var sellerUserID int
+	var offerStatus string
+	err = appdb.DB.QueryRowContext(ctx,
+		`SELECT m.user_id, o.OfferStatus
+          FROM Offer o
+          JOIN Listing l ON l.ListingID = o.ListingID
+          JOIN Member m ON m.MemberID = l.SellerID
+          WHERE o.OfferID = ?`, offerID,
+	).Scan(&sellerUserID, &offerStatus)
+
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "offer not found")
+		return
+	}
+	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
+		mw.RespondForbidden(w)
+		return
+	}
+	if offerStatus != "Submitted" {
+		respondError(w, http.StatusConflict, "offer is no longer active")
+		return
+	}
+
+	var body struct {
+		SellerAskingPrice float64 `json:"seller_asking_price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.SellerAskingPrice <= 0 {
+		respondError(w, http.StatusBadRequest, "seller_asking_price must be > 0")
 		return
 	}
 
@@ -513,113 +609,17 @@ func BuyerAcceptOffer(w http.ResponseWriter, r *http.Request) {
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE Offer SET OfferStatus = 'Accepted', AgreedPrice = ?, ResponseDate = NOW() WHERE OfferID = ?`,
-		askingPrice, offerID)
+		`UPDATE Offer SET SellerAskingPrice = ? WHERE OfferID = ? AND OfferStatus = 'Submitted'`,
+		body.SellerAskingPrice, offerID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "accept failed")
+		respondError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-
-	// Auto-decline all other submitted offers on this listing
-	_, _ = tx.ExecContext(ctx,
-		`UPDATE Offer SET OfferStatus = 'Declined', ResponseDate = NOW()
-         WHERE ListingID = ? AND OfferStatus = 'Submitted' AND OfferID != ?`,
-		listingID, offerID)
-
-	_, _ = tx.ExecContext(ctx,
-		`UPDATE Listing SET Status = 'Sold', LastModifiedDate = NOW() WHERE ListingID = ?`, listingID)
-
-	_, _ = tx.ExecContext(ctx,
-		`DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
-
-	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
-         VALUES (?, ?, ?, ?, ?)`,
-		listingID, sellerID, buyerID, offerID, askingPrice)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "transaction creation failed")
-		return
-	}
-	txID, _ := res.LastInsertId()
-
-	_, _ = tx.ExecContext(ctx,
-		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
-         VALUES (?, 'OfferAccepted', 'Offer Accepted', 'The buyer accepted your asking price!', ?, ?, ?)`,
-		sellerID, listingID, offerID, txID)
 
 	_ = tx.Commit()
-	respondJSON(w, http.StatusOK, map[string]interface{}{"transaction_id": txID, "message": "offer accepted at asking price"})
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"seller_asking_price": body.SellerAskingPrice,
+		"message":             "asking price updated",
+	})
 }
 
-// PUT /api/v1/offers/:id/buyer-decline — buyer declines (reason required)
-func BuyerDeclineOffer(w http.ResponseWriter, r *http.Request) {
-	offerID, err := urlParamInt(r, "id")
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid offer id")
-		return
-	}
-	ctx := r.Context()
-
-	var listingID, buyerID, sellerID int
-	var buyerUserID int
-	var offeredPrice float64
-	var offerStatus string
-	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT o.ListingID, o.BuyerID, l.SellerID, mb.user_id, o.OfferedPrice, o.OfferStatus
-          FROM Offer o
-          JOIN Listing l ON l.ListingID = o.ListingID
-          JOIN Member mb ON mb.MemberID = o.BuyerID
-          WHERE o.OfferID = ?`, offerID,
-	).Scan(&listingID, &buyerID, &sellerID, &buyerUserID, &offeredPrice, &offerStatus)
-
-	if err == sql.ErrNoRows {
-		respondError(w, http.StatusNotFound, "offer not found")
-		return
-	}
-	if !mw.IsOwnerOrAdmin(ctx, buyerUserID) {
-		mw.RespondForbidden(w)
-		return
-	}
-	if offerStatus != "Submitted" {
-		respondError(w, http.StatusConflict, "offer is no longer active")
-		return
-	}
-
-	var body struct {
-		Reason string `json:"reason"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Reason == "" {
-		respondError(w, http.StatusBadRequest, "reason is required")
-		return
-	}
-
-	tx, err := appdb.DB.BeginTx(ctx, nil)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "tx failed")
-		return
-	}
-	defer tx.Rollback()
-	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
-
-	_, _ = tx.ExecContext(ctx,
-		`UPDATE Offer SET OfferStatus = 'Declined', Reason = ?, ResponseDate = NOW() WHERE OfferID = ?`,
-		body.Reason, offerID)
-
-	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-         VALUES (?, ?, ?, ?, ?, 'Cancelled', ?)`,
-		listingID, sellerID, buyerID, offerID, offeredPrice, body.Reason)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "transaction creation failed")
-		return
-	}
-	txID, _ := res.LastInsertId()
-
-	_, _ = tx.ExecContext(ctx,
-		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
-         VALUES (?, 'OfferDeclined', 'Offer Declined', 'The buyer declined your listing price.', ?, ?, ?)`,
-		sellerID, listingID, offerID, txID)
-
-	_ = tx.Commit()
-	respondJSON(w, http.StatusOK, map[string]string{"message": "offer declined"})
-}
