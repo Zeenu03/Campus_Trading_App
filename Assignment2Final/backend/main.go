@@ -73,7 +73,7 @@ func main() {
 
 			// Members
 			r.Get("/members", handlers.ListMembers)                 // admin
-			r.Get("/members/{id}/portfolio", handlers.GetPortfolio) // own|admin
+			r.Get("/members/{id}/portfolio", handlers.GetPortfolio) // auth — public profile (watchlist owner-only)
 			r.Put("/members/{id}", handlers.UpdateMember)           // own|admin
 			r.Delete("/members/{id}", handlers.DeleteMember)        // admin
 

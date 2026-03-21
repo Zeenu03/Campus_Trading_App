@@ -176,6 +176,7 @@ export default function Portfolio() {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TX_STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-600'}`}>
                         {tx.status}
                       </span>
+                      {/* Rate button — only shown to the profile owner */}
                       {tx.status === 'Accepted' && isOwn && (
                         tx.has_rated
                           ? <span className="text-xs text-gray-400 italic">Rated ✓</span>

@@ -79,7 +79,9 @@ func ListMembers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/v1/members/:id/portfolio — own or admin
+// GET /api/v1/members/:id/portfolio — any authenticated user
+// All sections (listings, transactions, ratings, wish_requests) are public to authenticated users.
+// Watchlist is only populated when the requester is viewing their own profile.
 func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 	memberID, err := urlParamInt(r, "id")
 	if err != nil {
@@ -88,10 +90,10 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if !mw.IsMemberOwnerOrAdmin(ctx, memberID) {
-		mw.RespondForbidden(w)
-		return
-	}
+	// viewerMemberID is the requesting user's member ID (0 for admins with no member row).
+	// It is used for has_rated lookups so the Rate button reflects the VIEWER's status,
+	// not the profile owner's status.
+	viewerMemberID := mw.GetMemberID(ctx)
 
 	// Fetch member info
 	var m models.Member
@@ -138,9 +140,10 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 		listings = []map[string]interface{}{}
 	}
 
-	// Transactions (as buyer or seller).
+	// Transactions involving the profile owner (as buyer or seller).
 	// Status and Reason are derived from Offer via OfferID FK (not stored in Transaction).
-	// has_rated: whether this member has already submitted a rating for the transaction.
+	// has_rated uses viewerMemberID so the Rate button reflects whether the VIEWER
+	// has rated, not whether the profile owner has rated.
 	txRows, _ := appdb.DB.QueryContext(ctx,
 		`SELECT t.TransactionID, t.ListingID, l.Title,
                 t.SellerID, ms.Name, t.BuyerID, mb.Name,
@@ -154,7 +157,7 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
          JOIN Member mb  ON mb.MemberID = t.BuyerID
          JOIN Offer o    ON o.OfferID   = t.OfferID
          WHERE t.SellerID = ? OR t.BuyerID = ?
-         ORDER BY t.CreatedDate DESC`, memberID, memberID, memberID)
+         ORDER BY t.CreatedDate DESC`, viewerMemberID, memberID, memberID)
 	var transactions []map[string]interface{}
 	if txRows != nil {
 		defer txRows.Close()
@@ -241,9 +244,9 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 		wishRequests = []map[string]interface{}{}
 	}
 
-	// Watchlist (only for own profile)
+	// Watchlist — only returned when the viewer is the profile owner.
 	var watchlist []map[string]interface{}
-	if mw.GetMemberID(ctx) == memberID {
+	if viewerMemberID == memberID {
 		wlRows, _ := appdb.DB.QueryContext(ctx,
 			`SELECT w.WatchlistID, l.ListingID, l.Title, l.AskingPrice, l.Status
              FROM Watchlist w JOIN Listing l ON l.ListingID = w.ListingID
