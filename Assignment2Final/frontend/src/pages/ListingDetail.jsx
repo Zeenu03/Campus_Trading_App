@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { api, uploadsUrl } from '../api/client';
+import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ImageManager from '../components/ImageManager';
+import ListingImage from '../components/ListingImage';
 import ListingForm, { validateListingForm, buildListingPayload, listingToFormState } from '../components/ListingForm';
 import ChatPanel from '../components/ChatPanel';
 import { normalizeListingPayload, isListingDetailShape } from '../utils/listingApi';
@@ -395,12 +396,12 @@ export default function ListingDetail() {
           <div className="card p-0 overflow-hidden">
             {images.length > 0 ? (
               <div>
-                <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                  <img
-                    src={uploadsUrl(images[imgIndex]?.image_url)}
+                <div className="aspect-video bg-gray-100 flex items-center justify-center relative">
+                  <ListingImage
+                    path={images[imgIndex]?.image_url}
                     alt={listing.title}
+                    variant="hero"
                     className="max-h-full max-w-full object-contain"
-                    onError={e => { e.target.src = 'https://via.placeholder.com/400x300?text=No+Image'; }}
                   />
                 </div>
                 {images.length > 1 && (
@@ -408,8 +409,12 @@ export default function ListingDetail() {
                     {images.map((img, i) => (
                       <button key={img.image_id} onClick={() => setImgIndex(i)}
                         className={`w-14 h-14 rounded-lg overflow-hidden border-2 flex-shrink-0 ${i === imgIndex ? 'border-blue-500' : 'border-gray-200'}`}>
-                        <img src={uploadsUrl(img.image_url)} alt="" className="w-full h-full object-cover"
-                          onError={e => { e.target.src = 'https://via.placeholder.com/56?text=?'; }} />
+                        <ListingImage
+                          path={img.image_url}
+                          alt=""
+                          variant="thumb"
+                          className="w-full h-full object-cover"
+                        />
                       </button>
                     ))}
                   </div>
