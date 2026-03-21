@@ -33,6 +33,10 @@ export default function Portfolio() {
   const [ratingStars, setRatingStars] = useState(5);
   const [ratingText, setRatingText]   = useState('');
   const [ratingLoading, setRatingLoading] = useState(false);
+  const [expandedListings, setExpandedListings] = useState({}); // { listingId: bool }
+
+  const toggleListing = (listingId) =>
+    setExpandedListings(prev => ({ ...prev, [listingId]: !prev[listingId] }));
 
   const isOwn = user?.member_id && String(user.member_id) === String(id);
 
@@ -142,59 +146,104 @@ export default function Portfolio() {
           </div>
         )}
 
-        {activeTab === 'transactions' && (
-          <div className="space-y-3">
-            {transactions.map(tx => {
-              const isSeller = user?.member_id === tx.seller_id;
-              const role     = isSeller ? 'Sold' : 'Bought';
-              const other    = isSeller ? tx.buyer_name : tx.seller_name;
-              return (
-                <div key={tx.transaction_id}
-                  className={`card border-l-4 ${
-                    tx.status === 'Accepted'  ? 'border-l-green-500'  :
-                    tx.status === 'Withdrawn' ? 'border-l-yellow-500' : 'border-l-red-500'
-                  }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      {/* Clickable title → listing */}
+        {activeTab === 'transactions' && (() => {
+          // Group transactions by listing_id, preserving insertion order
+          const profileOwnerId = Number(id);
+          const groups = [];
+          const groupMap = {};
+          for (const tx of transactions) {
+            if (!groupMap[tx.listing_id]) {
+              groupMap[tx.listing_id] = { listing_id: tx.listing_id, listing_title: tx.listing_title, txs: [] };
+              groups.push(groupMap[tx.listing_id]);
+            }
+            groupMap[tx.listing_id].txs.push(tx);
+          }
+
+          const TxRow = ({ tx }) => {
+            const isSeller = profileOwnerId === tx.seller_id;
+            const role  = isSeller ? 'Sold' : 'Bought';
+            const other = isSeller ? tx.buyer_name : tx.seller_name;
+            return (
+              <div className={`flex items-start justify-between gap-4 px-3 py-2 rounded-lg border-l-4 bg-gray-50 ${
+                tx.status === 'Accepted'  ? 'border-l-green-500'  :
+                tx.status === 'Withdrawn' ? 'border-l-yellow-500' : 'border-l-red-500'
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600">
+                    {tx.status === 'Accepted'
+                      ? <><span className="font-medium">{role}</span> • ₹{Number(tx.agreed_price).toLocaleString()} • </>
+                      : <>Offered ₹{Number(tx.agreed_price).toLocaleString()} • </>
+                    }
+                    with {other} • {new Date(tx.created_date).toLocaleDateString()}
+                  </p>
+                  {tx.reason && <p className="text-xs text-gray-400 mt-0.5 italic">"{tx.reason}"</p>}
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TX_STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {tx.status}
+                  </span>
+                  {tx.status === 'Accepted' && isOwn && (
+                    tx.has_rated
+                      ? <span className="text-xs text-gray-400 italic">Rated ✓</span>
+                      : <button onClick={() => setRatingModal({ txId: tx.transaction_id })}
+                          className="btn-primary text-xs py-0.5 px-2">Rate</button>
+                  )}
+                </div>
+              </div>
+            );
+          };
+
+          return (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-400">
+                <span className="text-green-600 font-medium">Accepted</span> — seller accepted the offer &nbsp;·&nbsp;
+                <span className="text-red-600 font-medium">Declined</span> — seller declined the offer &nbsp;·&nbsp;
+                <span className="text-yellow-600 font-medium">Withdrawn</span> — buyer withdrew the offer
+              </p>
+
+              {groups.map(group => {
+                const isExpanded = expandedListings[group.listing_id] ?? false;
+                const multi = group.txs.length > 1;
+                return (
+                  <div key={group.listing_id} className="card p-0 overflow-hidden">
+                    {/* Listing header row */}
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 bg-white">
                       <Link
-                        to={`/listings/${tx.listing_id}`}
-                        className="font-medium text-sm text-blue-700 hover:underline"
+                        to={`/listings/${group.listing_id}`}
+                        className="font-medium text-sm text-blue-700 hover:underline flex-1 min-w-0 truncate"
                       >
-                        {tx.listing_title}
+                        {group.listing_title}
                       </Link>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        <span className="font-medium">{role}</span> • with {other} •{' '}
-                        ₹{Number(tx.agreed_price).toLocaleString()} •{' '}
-                        {new Date(tx.created_date).toLocaleDateString()}
-                      </p>
-                      {tx.reason && (
-                        <p className="text-xs text-gray-500 mt-1 italic">"{tx.reason}"</p>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs text-gray-400">{group.txs.length} {group.txs.length === 1 ? 'transaction' : 'transactions'}</span>
+                        {multi && (
+                          <button
+                            onClick={() => toggleListing(group.listing_id)}
+                            className="text-xs text-gray-500 hover:text-gray-800 font-medium"
+                          >
+                            {isExpanded ? '▲ Hide' : '▼ Show all'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TX_STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {tx.status}
-                      </span>
-                      {/* Rate button — only shown to the profile owner */}
-                      {tx.status === 'Accepted' && isOwn && (
-                        tx.has_rated
-                          ? <span className="text-xs text-gray-400 italic">Rated ✓</span>
-                          : <button
-                              onClick={() => setRatingModal({ txId: tx.transaction_id })}
-                              className="btn-primary text-xs py-1 px-3"
-                            >
-                              Rate
-                            </button>
-                      )}
+
+                    {/* Transaction rows */}
+                    <div className="px-4 pb-3 space-y-2">
+                      {/* Always show the first (most recent) transaction */}
+                      <TxRow tx={group.txs[0]} />
+                      {/* Remaining rows shown only when expanded */}
+                      {multi && isExpanded && group.txs.slice(1).map(tx => (
+                        <TxRow key={tx.transaction_id} tx={tx} />
+                      ))}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-            {transactions.length === 0 && <p className="text-gray-400 text-center py-8">No transactions yet.</p>}
-          </div>
-        )}
+                );
+              })}
+
+              {transactions.length === 0 && <p className="text-gray-400 text-center py-8">No transactions yet.</p>}
+            </div>
+          );
+        })()}
 
         {activeTab === 'ratings' && (
           <div className="space-y-3">

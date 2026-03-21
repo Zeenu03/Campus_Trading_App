@@ -49,16 +49,6 @@ export default function Listings() {
   const [category, setCategory] = useState('');
 
   useEffect(() => {
-    api.get('/wishrequests').catch(() => {}); // warm up
-    api.get('/listings', { page: 1, page_size: 1, status: 'Listed' })
-      .then(() => {})
-      .catch(() => {});
-    // Load categories from listings metadata
-    fetch('http://localhost:8080/api/v1/listings?page=1&page_size=1&status=Listed', { credentials: 'include' })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
     setLoading(true);
     const params = { page, page_size: 20, ...filters };
     if (category) params.category = category;
