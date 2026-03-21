@@ -31,6 +31,7 @@ Likely unused helper-path functions in B+ Tree logic (reachable only through cur
 - BPlusTree._fill_child in [database/bplustree.py](bplustree.py#L453)
 
 Note:
+
 - Dunder methods like __len__, __contains__, __repr__ can be used implicitly by Python, so they are not treated as dead code only based on direct name references.
 
 ## 2) File-by-File Function Explanations
@@ -38,6 +39,7 @@ Note:
 ## __init__.py
 
 ### run_quick_benchmark (re-export)
+
 - Source is [database/benchmark.py](benchmark.py#L450).
 - Exposed for convenient package-level import. Runs a default benchmark flow.
 
@@ -285,6 +287,7 @@ Note:
 ## table.py (Detailed)
 
 Purpose:
+
 - Wraps B+ tree storage into table semantics with schema/type validation.
 - Uses one configured field as primary search key.
 
@@ -332,6 +335,7 @@ Functions:
 ## db_manager.py (Detailed)
 
 Purpose:
+
 - Manages multiple logical databases in-memory.
 - Each database is a dict of table_name -> Table object.
 
@@ -364,6 +368,7 @@ Functions:
 ## benchmark.py (Detailed)
 
 Purpose:
+
 - Automated experiment harness to compare B+ Tree vs BruteForceDB runtime.
 - Supports insert/search/range/delete benchmarks across varying dataset sizes.
 - Produces plots and summary stats when optional dependencies are available.
