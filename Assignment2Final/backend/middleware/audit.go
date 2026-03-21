@@ -1,15 +1,25 @@
 package middleware
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	appaudit "campus-trading/audit"
 	appdb "campus-trading/db"
 )
+
+// auditCtx is a mutable struct injected into the request context by AuditMiddleware.
+// SessionGuard populates it when a valid session is found, so the outer middleware
+// can read the authenticated identity after the full handler chain returns.
+type auditCtx struct {
+	SessionID string
+	UserID    int
+}
+
+type auditCtxKey struct{}
 
 // responseWriter wraps http.ResponseWriter to capture status code.
 type responseWriter struct {
@@ -33,15 +43,17 @@ func (rw *responseWriter) statusCode() int {
 // It must be the outermost middleware (Use'd first) so it wraps all inner middleware.
 func AuditMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		ww := &responseWriter{ResponseWriter: w}
+		// Inject a mutable auditCtx pointer so SessionGuard can write back session
+		// identity into it even though it creates a new request via r.WithContext.
+		ac := &auditCtx{}
+		r = r.WithContext(context.WithValue(r.Context(), auditCtxKey{}, ac))
 
+		ww := &responseWriter{ResponseWriter: w}
 		next.ServeHTTP(ww, r)
 
-		// Gather context values set by SessionGuard
-		ctx := r.Context()
-		sessionID := GetSessionID(ctx)
-		userID := GetUserID(ctx)
+		// Read identity that SessionGuard populated into the shared pointer.
+		sessionID := ac.SessionID
+		userID := ac.UserID
 		statusCode := ww.statusCode()
 
 		action := r.Method
@@ -52,8 +64,6 @@ func AuditMiddleware(next http.Handler) http.Handler {
 		if statusCode >= 400 {
 			auditStatus = "fail"
 		}
-
-		_ = start // available for duration if needed
 
 		// Write to audit_log DB table
 		var sidVal interface{} = sessionID
@@ -97,13 +107,40 @@ func routeToTable(path string) string {
 	}
 	switch parts[0] {
 	case "auth":
+		// /auth/login|register → sys_user; /auth/logout|me → sys_session
+		if len(parts) > 1 {
+			switch parts[1] {
+			case "login", "register":
+				return "sys_user"
+			case "logout", "me":
+				return "sys_session"
+			}
+		}
 		return "sys_session"
 	case "members":
 		return "Member"
 	case "listings":
+		if len(parts) > 2 {
+			switch parts[2] {
+			case "images":
+				return "ListingImage"
+			case "offers":
+				return "Offer"
+			case "threads":
+				return "MessageThread"
+			case "my-offer":
+				return "Offer"
+			case "my-thread":
+				return "MessageThread"
+			case "interactions":
+				return "MessageThread"
+			}
+		}
 		return "Listing"
 	case "offers":
 		return "Offer"
+	case "threads":
+		return "Message"
 	case "transactions":
 		return "Transaction"
 	case "wishrequests":
@@ -114,7 +151,19 @@ func routeToTable(path string) string {
 		return "Notification"
 	case "reports":
 		return "Report"
+	case "categories":
+		return "Category"
 	case "admin":
+		if len(parts) > 1 {
+			switch parts[1] {
+			case "users":
+				return "sys_user"
+			case "members":
+				return "Member"
+			case "audit-log":
+				return "audit_log"
+			}
+		}
 		return "audit_log"
 	default:
 		return parts[0]

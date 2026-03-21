@@ -98,6 +98,30 @@ DROP TRIGGER IF EXISTS trg_category_bu;
 
 DROP TRIGGER IF EXISTS trg_category_bd;
 
+DROP TRIGGER IF EXISTS trg_sysuser_ai;
+
+DROP TRIGGER IF EXISTS trg_sysuser_bu;
+
+DROP TRIGGER IF EXISTS trg_sysuser_bd;
+
+DROP TRIGGER IF EXISTS trg_sysrole_ai;
+
+DROP TRIGGER IF EXISTS trg_sysrole_bu;
+
+DROP TRIGGER IF EXISTS trg_sysrole_bd;
+
+DROP TRIGGER IF EXISTS trg_syssession_ai;
+
+DROP TRIGGER IF EXISTS trg_syssession_bu;
+
+DROP TRIGGER IF EXISTS trg_syssession_bd;
+
+DROP TRIGGER IF EXISTS trg_sysuserrole_ai;
+
+DROP TRIGGER IF EXISTS trg_sysuserrole_bu;
+
+DROP TRIGGER IF EXISTS trg_sysuserrole_bd;
+
 DROP PROCEDURE IF EXISTS sp_audit_log;
 
 -- Drop tables in reverse dependency order
@@ -181,7 +205,7 @@ CREATE TABLE audit_log (
     user_id INT,
     action VARCHAR(20) NOT NULL,
     target_table VARCHAR(60) NOT NULL,
-    target_id VARCHAR(40),
+    target_id VARCHAR(64),
     ip_address VARCHAR(45),
     status ENUM('success', 'fail') NOT NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
@@ -487,7 +511,7 @@ DELIMITER / /
 CREATE PROCEDURE sp_audit_log(
     IN p_action    VARCHAR(20),
     IN p_table     VARCHAR(60),
-    IN p_target_id VARCHAR(40)
+    IN p_target_id VARCHAR(64)
 )
 BEGIN
     INSERT INTO audit_log (session_id, user_id, action, target_table, target_id, status)
@@ -643,6 +667,47 @@ BEGIN CALL sp_audit_log('UPDATE', 'Message', OLD.MessageID); END //
 
 CREATE TRIGGER trg_message_bd BEFORE DELETE ON Message FOR EACH ROW
 BEGIN CALL sp_audit_log('DELETE', 'Message', OLD.MessageID); END //
+
+-- sys_user triggers (authentication account changes)
+CREATE TRIGGER trg_sysuser_ai AFTER INSERT ON sys_user FOR EACH ROW
+BEGIN CALL sp_audit_log('INSERT', 'sys_user', NEW.user_id); END //
+
+CREATE TRIGGER trg_sysuser_bu BEFORE UPDATE ON sys_user FOR EACH ROW
+BEGIN CALL sp_audit_log('UPDATE', 'sys_user', OLD.user_id); END //
+
+CREATE TRIGGER trg_sysuser_bd BEFORE DELETE ON sys_user FOR EACH ROW
+BEGIN CALL sp_audit_log('DELETE', 'sys_user', OLD.user_id); END //
+
+-- sys_role triggers (role definition changes)
+CREATE TRIGGER trg_sysrole_ai AFTER INSERT ON sys_role FOR EACH ROW
+BEGIN CALL sp_audit_log('INSERT', 'sys_role', NEW.role_id); END //
+
+CREATE TRIGGER trg_sysrole_bu BEFORE UPDATE ON sys_role FOR EACH ROW
+BEGIN CALL sp_audit_log('UPDATE', 'sys_role', OLD.role_id); END //
+
+CREATE TRIGGER trg_sysrole_bd BEFORE DELETE ON sys_role FOR EACH ROW
+BEGIN CALL sp_audit_log('DELETE', 'sys_role', OLD.role_id); END //
+
+-- sys_session triggers (session creation / revocation / expiry updates)
+-- session_id is CHAR(64); target_id is VARCHAR(64) — fits exactly.
+CREATE TRIGGER trg_syssession_ai AFTER INSERT ON sys_session FOR EACH ROW
+BEGIN CALL sp_audit_log('INSERT', 'sys_session', NEW.session_id); END //
+
+CREATE TRIGGER trg_syssession_bu BEFORE UPDATE ON sys_session FOR EACH ROW
+BEGIN CALL sp_audit_log('UPDATE', 'sys_session', OLD.session_id); END //
+
+CREATE TRIGGER trg_syssession_bd BEFORE DELETE ON sys_session FOR EACH ROW
+BEGIN CALL sp_audit_log('DELETE', 'sys_session', OLD.session_id); END //
+
+-- sys_user_role triggers (role assignments — composite PK, concatenated as "uid:rid")
+CREATE TRIGGER trg_sysuserrole_ai AFTER INSERT ON sys_user_role FOR EACH ROW
+BEGIN CALL sp_audit_log('INSERT', 'sys_user_role', CONCAT(NEW.user_id, ':', NEW.role_id)); END //
+
+CREATE TRIGGER trg_sysuserrole_bu BEFORE UPDATE ON sys_user_role FOR EACH ROW
+BEGIN CALL sp_audit_log('UPDATE', 'sys_user_role', CONCAT(OLD.user_id, ':', OLD.role_id)); END //
+
+CREATE TRIGGER trg_sysuserrole_bd BEFORE DELETE ON sys_user_role FOR EACH ROW
+BEGIN CALL sp_audit_log('DELETE', 'sys_user_role', CONCAT(OLD.user_id, ':', OLD.role_id)); END //
 
 DELIMITER;
 

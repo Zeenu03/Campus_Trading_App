@@ -86,6 +86,13 @@ func SessionGuard(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, CtxSessionID, sessionID)
 		ctx = context.WithValue(ctx, CtxMemberID, memberID)
 
+		// Write identity back into the mutable auditCtx injected by AuditMiddleware
+		// so it can log the correct session and user after the handler chain returns.
+		if ac, ok := r.Context().Value(auditCtxKey{}).(*auditCtx); ok {
+			ac.SessionID = sessionID
+			ac.UserID = userID
+		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
