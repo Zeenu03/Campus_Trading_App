@@ -66,7 +66,21 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusForbidden, "cannot open a chat on your own listing")
 		return
 	}
+	// New threads only while Listed. If the listing is no longer open, return an existing
+	// thread for this buyer (so they can keep chatting) but reject brand-new threads.
 	if listingStatus != "Listed" {
+		var existingID int
+		errThread := appdb.DB.QueryRowContext(ctx,
+			`SELECT ThreadID FROM MessageThread WHERE ListingID = ? AND BuyerID = ?`,
+			listingID, memberID).Scan(&existingID)
+		if errThread == nil {
+			respondJSON(w, http.StatusOK, map[string]interface{}{"thread_id": existingID, "message": "existing thread"})
+			return
+		}
+		if errThread != sql.ErrNoRows {
+			respondError(w, http.StatusInternalServerError, "query failed")
+			return
+		}
 		respondError(w, http.StatusConflict, "listing is not available")
 		return
 	}

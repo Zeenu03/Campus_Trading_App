@@ -100,8 +100,9 @@ export default function ListingDetail() {
   const [interactions, setInteractions]         = useState([]);
   const [interactionsLoading, setInteractionsLoading] = useState(false);
 
-  // Chat panel
-  const [chatThreadId, setChatThreadId]     = useState(null);
+  // Chat: buyerThreadId persists when the panel is closed; chatOpen only toggles visibility.
+  const [buyerThreadId, setBuyerThreadId]     = useState(null);
+  const [chatOpen, setChatOpen]               = useState(false);
   const [chatThreadLoading, setChatThreadLoading] = useState(false);
 
   // ── Load listing ──────────────────────────────────────────────
@@ -118,6 +119,11 @@ export default function ListingDetail() {
     setLoading(true);
     loadListing().finally(() => setLoading(false));
   }, [loadListing]);
+
+  useEffect(() => {
+    setBuyerThreadId(null);
+    setChatOpen(false);
+  }, [id]);
 
   // Reset image index on listing change
   useEffect(() => { setImgIndex(0); }, [id]);
@@ -138,7 +144,7 @@ export default function ListingDetail() {
       .catch(() => setMyOffer(null));
 
     api.get(`/listings/${id}/my-thread`)
-      .then(data => { if (data?.thread_id) setChatThreadId(data.thread_id); })
+      .then(data => { if (data?.thread_id) setBuyerThreadId(data.thread_id); })
       .catch(() => {});
   }, [listing?.listing_id, id, isMember, user?.member_id, listing?.seller_id]);
 
@@ -167,6 +173,8 @@ export default function ListingDetail() {
   const isOwn = String(user?.member_id) === String(listing.seller_id);
   const images = listing.images || [];
   const hasActiveOffer = myOffer?.offer_status === 'Submitted';
+  const canOpenNewChat = listing.status === 'Listed';
+  const canUseChat = canOpenNewChat || buyerThreadId != null;
 
   // ── Handlers ──────────────────────────────────────────────────
 
@@ -191,8 +199,7 @@ export default function ListingDetail() {
         api.get(`/listings/${id}/my-thread`).catch(() => null),
       ]);
       setMyOffer(offerData || null);
-      if (threadData?.thread_id) setChatThreadId(threadData.thread_id);
-      else if (res.offer_id) setChatThreadId(null); // will be available shortly
+      if (threadData?.thread_id) setBuyerThreadId(threadData.thread_id);
     } catch (err) {
       setOfferError(err.message);
     } finally {
@@ -327,11 +334,16 @@ export default function ListingDetail() {
   };
 
   const handleChatWithSeller = async () => {
-    if (chatThreadId) { return; } // already have thread, ChatPanel will open via state
+    if (buyerThreadId) {
+      setChatOpen(o => !o);
+      return;
+    }
+    if (listing.status !== 'Listed') return;
     setChatThreadLoading(true);
     try {
       const res = await api.post(`/listings/${id}/threads`, {});
-      setChatThreadId(res.thread_id);
+      if (res?.thread_id != null) setBuyerThreadId(res.thread_id);
+      setChatOpen(true);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -503,28 +515,29 @@ export default function ListingDetail() {
           {!isOwn && isMember() && (
             <div className="card space-y-4">
 
-              {/* Chat with Seller button (always visible for buyer) */}
               <button
-                onClick={() => {
-                  if (chatThreadId) {
-                    // Toggle panel off/on
-                    setChatThreadId(t => t ? null : chatThreadId);
-                  } else {
-                    handleChatWithSeller();
-                  }
-                }}
-                disabled={chatThreadLoading}
-                className="btn-secondary w-full text-sm"
+                type="button"
+                onClick={handleChatWithSeller}
+                disabled={chatThreadLoading || !canUseChat}
+                className="btn-secondary w-full text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {chatThreadLoading ? 'Opening chat…' : chatThreadId ? '💬 Chat with Seller (open)' : '💬 Chat with Seller'}
+                {chatThreadLoading
+                  ? 'Opening chat…'
+                  : chatOpen
+                    ? '💬 Chat with Seller (open)'
+                    : '💬 Chat with Seller'}
               </button>
+              {!canUseChat && (
+                <p className="text-xs text-gray-500">
+                  Chat is only available while the item is listed, unless you already started a conversation.
+                </p>
+              )}
 
-              {/* Chat panel inline (buyer side) */}
-              {chatThreadId && (
+              {buyerThreadId && chatOpen && (
                 <ChatPanel
-                  threadId={chatThreadId}
+                  threadId={buyerThreadId}
                   currentUserId={user?.member_id}
-                  onClose={() => setChatThreadId(null)}
+                  onClose={() => setChatOpen(false)}
                 />
               )}
 
