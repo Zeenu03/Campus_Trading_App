@@ -602,12 +602,12 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		`UPDATE Offer SET OfferStatus = 'Withdrawn', Reason = ?, ResponseDate = NOW()
          WHERE ListingID = ? AND OfferStatus = 'Submitted'`, reason, listingID)
 
-	// Create a Declined transaction for each affected offer
+	// Create a transaction for each affected offer; status/reason are derived from the offer row.
 	for _, ao := range affectedOffers {
 		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-             VALUES (?, ?, ?, ?, ?, 'Declined', ?)`,
-			listingID, ao.sellerID, ao.buyerID, ao.offerID, ao.price, reason)
+			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
+             VALUES (?, ?, ?, ?, ?)`,
+			listingID, ao.sellerID, ao.buyerID, ao.offerID, ao.price)
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -144,37 +144,53 @@ export default function Portfolio() {
 
         {activeTab === 'transactions' && (
           <div className="space-y-3">
-            {transactions.map(tx => (
-              <div key={tx.transaction_id}
-                className={`card flex items-start justify-between gap-4 border-l-4 ${
-                  tx.status === 'Accepted'  ? 'border-l-green-500' :
-                  tx.status === 'Withdrawn' ? 'border-l-yellow-500' : 'border-l-red-500'
-                }`}>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm">{tx.listing_title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    ₹{Number(tx.agreed_price).toLocaleString()} •{' '}
-                    {new Date(tx.created_date).toLocaleDateString()}
-                  </p>
-                  {tx.reason && (
-                    <p className="text-xs text-gray-500 mt-1 italic">Reason: "{tx.reason}"</p>
-                  )}
+            {transactions.map(tx => {
+              const isSeller = user?.member_id === tx.seller_id;
+              const role     = isSeller ? 'Sold' : 'Bought';
+              const other    = isSeller ? tx.buyer_name : tx.seller_name;
+              return (
+                <div key={tx.transaction_id}
+                  className={`card border-l-4 ${
+                    tx.status === 'Accepted'  ? 'border-l-green-500'  :
+                    tx.status === 'Withdrawn' ? 'border-l-yellow-500' : 'border-l-red-500'
+                  }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      {/* Clickable title → listing */}
+                      <Link
+                        to={`/listings/${tx.listing_id}`}
+                        className="font-medium text-sm text-blue-700 hover:underline"
+                      >
+                        {tx.listing_title}
+                      </Link>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        <span className="font-medium">{role}</span> • with {other} •{' '}
+                        ₹{Number(tx.agreed_price).toLocaleString()} •{' '}
+                        {new Date(tx.created_date).toLocaleDateString()}
+                      </p>
+                      {tx.reason && (
+                        <p className="text-xs text-gray-500 mt-1 italic">"{tx.reason}"</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TX_STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {tx.status}
+                      </span>
+                      {tx.status === 'Accepted' && isOwn && (
+                        tx.has_rated
+                          ? <span className="text-xs text-gray-400 italic">Rated ✓</span>
+                          : <button
+                              onClick={() => setRatingModal({ txId: tx.transaction_id })}
+                              className="btn-primary text-xs py-1 px-3"
+                            >
+                              Rate
+                            </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${TX_STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-600'}`}>
-                    {tx.status}
-                  </span>
-                  {tx.status === 'Accepted' && isOwn && (
-                    <button
-                      onClick={() => setRatingModal({ txId: tx.transaction_id })}
-                      className="btn-primary text-xs py-1 px-3"
-                    >
-                      Rate
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {transactions.length === 0 && <p className="text-gray-400 text-center py-8">No transactions yet.</p>}
           </div>
         )}

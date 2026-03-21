@@ -496,7 +496,7 @@ export default function ListingDetail() {
           </div>
 
           {/* ── Buyer: Offer + Chat controls ── */}
-          {!isOwn && isMember() && listing.status === 'Listed' && (
+          {!isOwn && isMember() && (
             <div className="card space-y-4">
 
               {/* Chat with Seller button (always visible for buyer) */}
@@ -589,15 +589,24 @@ export default function ListingDetail() {
 
               {/* Show offer status if not Submitted */}
               {myOffer != null && myOffer.offer_status !== 'Submitted' && (
-                <div className={`text-xs px-3 py-2 rounded-md font-medium ${OFFER_STATUS_COLORS[myOffer.offer_status] || ''}`}>
-                  Your offer is <strong>{myOffer.offer_status}</strong>
-                  {myOffer.agreed_price != null && ` at ${fmtPrice(myOffer.agreed_price)}`}
-                  {myOffer.reason && ` — "${myOffer.reason}"`}
+                <div className={`text-sm px-3 py-2 rounded-md font-medium space-y-1 ${OFFER_STATUS_COLORS[myOffer.offer_status] || ''}`}>
+                  <p>
+                    Your offer was <strong>{myOffer.offer_status}</strong>
+                    {myOffer.agreed_price != null && ` at ${fmtPrice(myOffer.agreed_price)}`}.
+                  </p>
+                  {myOffer.reason && (
+                    <p className="text-xs font-normal">Reason: "{myOffer.reason}"</p>
+                  )}
+                  {myOffer.offer_status === 'Declined' && (
+                    <p className="text-xs font-normal mt-1">
+                      You cannot submit a new offer on this listing.
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* Make new offer (only if no existing offer) */}
-              {(myOffer === null || myOffer === undefined) && (
+              {/* Make new offer — only for Listed listings with no prior offer */}
+              {listing.status === 'Listed' && (myOffer === null || myOffer === undefined) && (
                 <div className="space-y-3 pt-1 border-t">
                   <h2 className="font-semibold text-gray-800 text-sm">Make an Offer</h2>
                   {offerError && <p className="text-xs text-red-600">{offerError}</p>}
@@ -619,30 +628,32 @@ export default function ListingDetail() {
                 </div>
               )}
 
-              {/* Watchlist toggle */}
-              <div className="pt-1 border-t">
-                {hasActiveOffer ? (
-                  <button
-                    disabled
-                    title="Cannot remove while an offer is active"
-                    className="w-full text-sm btn-secondary opacity-50 cursor-not-allowed"
-                  >
-                    ★ Watching (offer active)
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleWatchToggle}
-                    disabled={watchLoading}
-                    className={`w-full text-sm ${listing.my_watchlist_id != null ? 'btn-danger' : 'btn-secondary'}`}
-                  >
-                    {watchLoading
-                      ? (listing.my_watchlist_id != null ? 'Removing…' : 'Adding…')
-                      : listing.my_watchlist_id != null
-                        ? '✕ Remove from Watchlist'
-                        : '+ Add to Watchlist'}
-                  </button>
-                )}
-              </div>
+              {/* Watchlist toggle — only for Listed listings */}
+              {listing.status === 'Listed' && (
+                <div className="pt-1 border-t">
+                  {hasActiveOffer ? (
+                    <button
+                      disabled
+                      title="Cannot remove while an offer is active"
+                      className="w-full text-sm btn-secondary opacity-50 cursor-not-allowed"
+                    >
+                      ★ Watching (offer active)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleWatchToggle}
+                      disabled={watchLoading}
+                      className={`w-full text-sm ${listing.my_watchlist_id != null ? 'btn-danger' : 'btn-secondary'}`}
+                    >
+                      {watchLoading
+                        ? (listing.my_watchlist_id != null ? 'Removing…' : 'Adding…')
+                        : listing.my_watchlist_id != null
+                          ? '✕ Remove from Watchlist'
+                          : '+ Add to Watchlist'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

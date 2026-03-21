@@ -11,6 +11,7 @@ import (
 )
 
 // GET /api/v1/transactions — auth, own transactions
+// Status and Reason are derived from Offer via OfferID FK (not stored in Transaction).
 func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	memberID := mw.GetMemberID(ctx)
@@ -25,7 +26,6 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	var total int
 	var countQuery string
 	var countArgs []interface{}
-
 	if mw.HasRole(ctx, "admin") {
 		countQuery = `SELECT COUNT(*) FROM Transaction`
 	} else {
@@ -36,29 +36,40 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 
 	offset, totalPages := paginate(page, pageSize, total)
 
+	// has_rated sub-select: whether the requesting member has already rated this transaction.
+	// For admin (memberID == 0) this always returns 0.
+	hasRatedExpr := `0`
+	if memberID != 0 {
+		hasRatedExpr = `(SELECT COUNT(*) FROM Rating r WHERE r.TransactionID = t.TransactionID AND r.RaterID = ?)`
+	}
+
 	var query string
 	var args []interface{}
 	if mw.HasRole(ctx, "admin") {
-		query = `SELECT t.TransactionID, t.ListingID, l.Title, t.SellerID, ms.Name,
-                     t.BuyerID, mb.Name, t.OfferID, t.AgreedPrice,
-                     t.Status, t.Reason, t.CreatedDate
+		query = `SELECT t.TransactionID, t.ListingID, l.Title,
+                     t.SellerID, ms.Name, t.BuyerID, mb.Name,
+                     t.OfferID, t.AgreedPrice,
+                     o.OfferStatus, o.Reason, ` + hasRatedExpr + `, t.CreatedDate
                   FROM Transaction t
-                  JOIN Listing l ON l.ListingID = t.ListingID
-                  JOIN Member ms ON ms.MemberID = t.SellerID
-                  JOIN Member mb ON mb.MemberID = t.BuyerID
+                  JOIN Listing l  ON l.ListingID  = t.ListingID
+                  JOIN Member ms  ON ms.MemberID  = t.SellerID
+                  JOIN Member mb  ON mb.MemberID  = t.BuyerID
+                  JOIN Offer o    ON o.OfferID    = t.OfferID
                   ORDER BY t.CreatedDate DESC LIMIT ? OFFSET ?`
 		args = []interface{}{pageSize, offset}
 	} else {
-		query = `SELECT t.TransactionID, t.ListingID, l.Title, t.SellerID, ms.Name,
-                     t.BuyerID, mb.Name, t.OfferID, t.AgreedPrice,
-                     t.Status, t.Reason, t.CreatedDate
+		query = `SELECT t.TransactionID, t.ListingID, l.Title,
+                     t.SellerID, ms.Name, t.BuyerID, mb.Name,
+                     t.OfferID, t.AgreedPrice,
+                     o.OfferStatus, o.Reason, ` + hasRatedExpr + `, t.CreatedDate
                   FROM Transaction t
-                  JOIN Listing l ON l.ListingID = t.ListingID
-                  JOIN Member ms ON ms.MemberID = t.SellerID
-                  JOIN Member mb ON mb.MemberID = t.BuyerID
+                  JOIN Listing l  ON l.ListingID  = t.ListingID
+                  JOIN Member ms  ON ms.MemberID  = t.SellerID
+                  JOIN Member mb  ON mb.MemberID  = t.BuyerID
+                  JOIN Offer o    ON o.OfferID    = t.OfferID
                   WHERE t.SellerID = ? OR t.BuyerID = ?
                   ORDER BY t.CreatedDate DESC LIMIT ? OFFSET ?`
-		args = []interface{}{memberID, memberID, pageSize, offset}
+		args = []interface{}{memberID, memberID, memberID, pageSize, offset}
 	}
 
 	rows, err := appdb.DB.QueryContext(ctx, query, args...)
@@ -71,12 +82,14 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		var offerID *int
-		_ = rows.Scan(&t.TransactionID, &t.ListingID, &t.ListingTitle,
+		var hasRatedInt int
+		_ = rows.Scan(
+			&t.TransactionID, &t.ListingID, &t.ListingTitle,
 			&t.SellerID, &t.SellerName, &t.BuyerID, &t.BuyerName,
-			&offerID, &t.AgreedPrice,
-			&t.Status, &t.Reason, &t.CreatedDate)
-		t.OfferID = offerID
+			&t.OfferID, &t.AgreedPrice,
+			&t.Status, &t.Reason, &hasRatedInt, &t.CreatedDate,
+		)
+		t.HasRated = hasRatedInt > 0
 		txs = append(txs, t)
 	}
 	if txs == nil {
@@ -87,7 +100,7 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/v1/transactions/:id/rate — own party, only when Accepted
+// POST /api/v1/transactions/:id/rate — own party, only for Accepted transactions
 func RateTransaction(w http.ResponseWriter, r *http.Request) {
 	txID, err := urlParamInt(r, "id")
 	if err != nil {
@@ -100,7 +113,9 @@ func RateTransaction(w http.ResponseWriter, r *http.Request) {
 	var sellerID, buyerID int
 	var status string
 	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT SellerID, BuyerID, Status FROM Transaction WHERE TransactionID = ?`, txID,
+		`SELECT t.SellerID, t.BuyerID, o.OfferStatus
+         FROM Transaction t JOIN Offer o ON o.OfferID = t.OfferID
+         WHERE t.TransactionID = ?`, txID,
 	).Scan(&sellerID, &buyerID, &status)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "transaction not found")

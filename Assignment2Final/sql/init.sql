@@ -353,27 +353,23 @@ CREATE TABLE Offer (
     CONSTRAINT UQ_Offer_Listing_Buyer UNIQUE (ListingID, BuyerID)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- Transaction.Status and Transaction.Reason are intentionally NOT stored here.
+-- They are derived at query time by joining Offer on OfferID:
+--   Status ← Offer.OfferStatus  (Accepted | Declined | Withdrawn)
+--   Reason ← Offer.Reason
+-- This makes OfferID the true FK that governs the semantic state of every transaction.
 CREATE TABLE `Transaction` (
     TransactionID INT AUTO_INCREMENT PRIMARY KEY,
     ListingID INT NOT NULL,
     SellerID INT NOT NULL,
     BuyerID INT NOT NULL,
-    OfferID INT NULL,
+    OfferID INT NOT NULL,
     AgreedPrice DECIMAL(10, 2) NOT NULL,
-    Status VARCHAR(20) NOT NULL DEFAULT 'Accepted',
-    Reason VARCHAR(1000) NULL,
     CreatedDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT FK_Transaction_Listing FOREIGN KEY (ListingID) REFERENCES Listing (ListingID),
     CONSTRAINT FK_Transaction_Seller FOREIGN KEY (SellerID) REFERENCES Member (MemberID),
     CONSTRAINT FK_Transaction_Buyer FOREIGN KEY (BuyerID) REFERENCES Member (MemberID),
     CONSTRAINT FK_Transaction_Offer FOREIGN KEY (OfferID) REFERENCES Offer (OfferID),
-    CONSTRAINT CHK_Transaction_Status CHECK (
-        Status IN (
-            'Accepted',
-            'Declined',
-            'Withdrawn'
-        )
-    ),
     CONSTRAINT CHK_Transaction_Price CHECK (AgreedPrice >= 0),
     CONSTRAINT CHK_Transaction_Parties CHECK (BuyerID <> SellerID)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

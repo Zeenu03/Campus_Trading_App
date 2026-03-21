@@ -268,8 +268,8 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status)
-         VALUES (?, ?, ?, ?, ?, 'Accepted')`,
+		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
+         VALUES (?, ?, ?, ?, ?)`,
 		listingID, sellerID, buyerID, offerID, offeredPrice)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "transaction creation failed")
@@ -277,11 +277,11 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	txID, _ := res.LastInsertId()
 
-	// Create Declined transactions for each auto-declined offer
+	// Create transactions for each auto-declined offer; status/reason derived from offer row.
 	for _, o := range others {
 		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-             VALUES (?, ?, ?, ?, ?, 'Declined', 'Sold to another buyer')`,
+			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
+             VALUES (?, ?, ?, ?, ?)`,
 			listingID, sellerID, o.buyerID, o.id, o.price)
 	}
 
@@ -348,9 +348,9 @@ func DeclineOffer(w http.ResponseWriter, r *http.Request) {
 		body.Reason, offerID)
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-         VALUES (?, ?, ?, ?, ?, 'Declined', ?)`,
-		listingID, sellerID, buyerID, offerID, offeredPrice, body.Reason)
+		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
+         VALUES (?, ?, ?, ?, ?)`,
+		listingID, sellerID, buyerID, offerID, offeredPrice)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "transaction creation failed")
 		return
@@ -421,9 +421,9 @@ func WithdrawOffer(w http.ResponseWriter, r *http.Request) {
 		body.Reason, offerID)
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice, Status, Reason)
-         VALUES (?, ?, ?, ?, ?, 'Withdrawn', ?)`,
-		listingID, sellerID, buyerID, offerID, offeredPrice, body.Reason)
+		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
+         VALUES (?, ?, ?, ?, ?)`,
+		listingID, sellerID, buyerID, offerID, offeredPrice)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "transaction creation failed")
 		return

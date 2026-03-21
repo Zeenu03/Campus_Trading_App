@@ -138,26 +138,53 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 		listings = []map[string]interface{}{}
 	}
 
-	// Transactions (as buyer or seller)
+	// Transactions (as buyer or seller).
+	// Status and Reason are derived from Offer via OfferID FK (not stored in Transaction).
+	// has_rated: whether this member has already submitted a rating for the transaction.
 	txRows, _ := appdb.DB.QueryContext(ctx,
-		`SELECT t.TransactionID, l.Title, t.AgreedPrice, t.Status, t.CreatedDate
-         FROM Transaction t JOIN Listing l ON l.ListingID = t.ListingID
+		`SELECT t.TransactionID, t.ListingID, l.Title,
+                t.SellerID, ms.Name, t.BuyerID, mb.Name,
+                t.OfferID, t.AgreedPrice,
+                o.OfferStatus, o.Reason,
+                (SELECT COUNT(*) FROM Rating r WHERE r.TransactionID = t.TransactionID AND r.RaterID = ?) AS has_rated,
+                t.CreatedDate
+         FROM Transaction t
+         JOIN Listing l  ON l.ListingID = t.ListingID
+         JOIN Member ms  ON ms.MemberID = t.SellerID
+         JOIN Member mb  ON mb.MemberID = t.BuyerID
+         JOIN Offer o    ON o.OfferID   = t.OfferID
          WHERE t.SellerID = ? OR t.BuyerID = ?
-         ORDER BY t.CreatedDate DESC`, memberID, memberID)
+         ORDER BY t.CreatedDate DESC`, memberID, memberID, memberID)
 	var transactions []map[string]interface{}
 	if txRows != nil {
 		defer txRows.Close()
 		for txRows.Next() {
-			var id int
-			var title, status string
-			var price float64
+			var txID, listingID, sellerID, buyerID, offerID int
+			var listingTitle, sellerName, buyerName, status string
+			var reason *string
+			var agreedPrice float64
+			var hasRatedInt int
 			var created interface{}
-			_ = txRows.Scan(&id, &title, &price, &status, &created)
+			_ = txRows.Scan(
+				&txID, &listingID, &listingTitle,
+				&sellerID, &sellerName, &buyerID, &buyerName,
+				&offerID, &agreedPrice,
+				&status, &reason,
+				&hasRatedInt, &created,
+			)
 			transactions = append(transactions, map[string]interface{}{
-				"transaction_id": id,
-				"listing_title":  title,
-				"agreed_price":   price,
+				"transaction_id": txID,
+				"listing_id":     listingID,
+				"listing_title":  listingTitle,
+				"seller_id":      sellerID,
+				"seller_name":    sellerName,
+				"buyer_id":       buyerID,
+				"buyer_name":     buyerName,
+				"offer_id":       offerID,
+				"agreed_price":   agreedPrice,
 				"status":         status,
+				"reason":         reason,
+				"has_rated":      hasRatedInt > 0,
 				"created_date":   created,
 			})
 		}

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	appaudit "campus-trading/audit"
 	appdb "campus-trading/db"
@@ -145,11 +146,28 @@ func main() {
 	}
 }
 
-func corsMiddleware(frontendURL string) func(http.Handler) http.Handler {
+func parseAllowedOrigins(raw string) []string {
+	var out []string
+	for _, p := range strings.Split(raw, ",") {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func corsMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
+	allowed := parseAllowedOrigins(allowedOrigins)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendURL)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			origin := r.Header.Get("Origin")
+			for _, o := range allowed {
+				if origin != "" && o == origin {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					break
+				}
+			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 

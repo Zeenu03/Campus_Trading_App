@@ -126,11 +126,14 @@ type Transaction struct {
 	SellerName    string    `json:"seller_name,omitempty"` // joined
 	BuyerID       int       `json:"buyer_id"`
 	BuyerName     string    `json:"buyer_name,omitempty"` // joined
-	OfferID       *int      `json:"offer_id"`
+	OfferID       int       `json:"offer_id"`
 	AgreedPrice   float64   `json:"agreed_price"`
-	Status        string    `json:"status"`
-	Reason        *string   `json:"reason"`
-	CreatedDate   time.Time `json:"created_date"`
+	// Status and Reason are derived at query time from Offer.OfferStatus and Offer.Reason
+	// via the OfferID FK — not stored redundantly in the Transaction table.
+	Status      string  `json:"status"`
+	Reason      *string `json:"reason"`
+	HasRated    bool    `json:"has_rated"` // true if the requesting user has already submitted a rating
+	CreatedDate time.Time `json:"created_date"`
 }
 
 type Rating struct {
