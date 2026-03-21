@@ -24,6 +24,12 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 try:
+    import seaborn as sns
+    SEABORN_AVAILABLE = True
+except ImportError:
+    SEABORN_AVAILABLE = False
+
+try:
     import numpy as np
     NUMPY_AVAILABLE = True
 except ImportError:
@@ -297,13 +303,23 @@ class PerformanceAnalyzer:
             print("Matplotlib not available. Install with: pip install matplotlib")
             return
 
+        if SEABORN_AVAILABLE:
+            # Seaborn provides a cleaner, publication-friendly default style.
+            sns.set_theme(style='whitegrid', context='talk', palette='deep')
+        else:
+            plt.style.use('ggplot')
+
         os.makedirs(save_path, exist_ok=True)
 
         # Combined 2x2 plot
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
         operations = ['insert', 'search', 'range_query', 'delete']
         titles = ['Insertion', 'Search', 'Range Query', 'Deletion']
-        colors = {'bptree': '#2E86AB', 'brute': '#E94F37'}
+        if SEABORN_AVAILABLE:
+            palette = sns.color_palette('deep', 2)
+            colors = {'bptree': palette[0], 'brute': palette[1]}
+        else:
+            colors = {'bptree': '#2E86AB', 'brute': '#E94F37'}
 
         for ax, op, title in zip(axes.flat, operations, titles):
             ax.plot(self.sizes, self.results[op]['bptree'],
@@ -358,11 +374,17 @@ class PerformanceAnalyzer:
         if not NUMPY_AVAILABLE:
             return
 
+        if SEABORN_AVAILABLE:
+            sns.set_theme(style='whitegrid', context='talk', palette='colorblind')
+
         fig, ax = plt.subplots(figsize=(12, 6))
 
         operations = ['insert', 'search', 'range_query', 'delete']
         titles = ['Insert', 'Search', 'Range Query', 'Delete']
-        colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D']
+        if SEABORN_AVAILABLE:
+            colors = sns.color_palette('colorblind', len(operations))
+        else:
+            colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D']
 
         for op, title, color in zip(operations, titles, colors):
             speedups = []
