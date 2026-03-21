@@ -105,6 +105,7 @@ func Benchmark(w http.ResponseWriter, r *http.Request) {
 		explainRows, err := appdb.DB.QueryContext(ctx, explainQuery, q.Args...)
 		var accessType, extra string
 		var rowsExamined int64
+		var possibleKeys, keyUsed, keyLen *string
 		if err == nil {
 			defer explainRows.Close()
 			if explainRows.Next() {
@@ -121,6 +122,9 @@ func Benchmark(w http.ResponseWriter, r *http.Request) {
 				if er.Extra != nil {
 					extra = *er.Extra
 				}
+				possibleKeys = er.PossibleKeys
+				keyUsed = er.Key
+				keyLen = er.KeyLen
 			}
 		}
 
@@ -145,6 +149,9 @@ func Benchmark(w http.ResponseWriter, r *http.Request) {
 			QueryName:    q.Name,
 			Query:        q.Query,
 			AccessType:   accessType,
+			PossibleKeys: possibleKeys,
+			KeyUsed:      keyUsed,
+			KeyLen:       keyLen,
 			RowsExamined: rowsPtr,
 			Extra:        extraPtr,
 			DurationMs:   avgMs,
