@@ -302,6 +302,9 @@ type BenchmarkResult struct {
 	QueryName    string  `json:"query_name"`
 	Query        string  `json:"query"`
 	AccessType   string  `json:"type"`
+	PossibleKeys *string `json:"possible_keys"`
+	KeyUsed      *string `json:"key_used"`
+	KeyLen       *string `json:"key_len"`
 	RowsExamined *int64  `json:"rows_examined"`
 	Extra        *string `json:"extra"`
 	DurationMs   float64 `json:"duration_ms"`
