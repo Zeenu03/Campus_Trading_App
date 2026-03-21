@@ -290,11 +290,7 @@ CREATE TABLE Listing (
     CONSTRAINT FK_Listing_Category FOREIGN KEY (CategoryID) REFERENCES Category (CategoryID) ON UPDATE CASCADE,
     CONSTRAINT FK_Listing_WishRequest FOREIGN KEY (WishRequestID) REFERENCES WishRequest (WishRequestID) ON DELETE SET NULL,
     CONSTRAINT CHK_Listing_Status CHECK (
-        Status IN (
-            'Listed',
-            'Sold',
-            'Withdrawn'
-        )
+        Status IN ('Listed', 'Sold', 'Withdrawn')
     ),
     CONSTRAINT CHK_Listing_Condition CHECK (
         `Condition` IN (
@@ -448,11 +444,9 @@ CREATE TABLE Notification (
             'OfferWithdrawn',
             'PriceDropped',
             'StatusChanged',
-            'MeetingReminder',
             'TransactionCompleted',
             'RatingReceived',
             'WishRequestMatched',
-            'ListingExpiring',
             'General'
         )
     )
@@ -488,7 +482,7 @@ CREATE TABLE Message (
 -- NULL session_id signals a direct (unauthorized) DB write
 -- ============================================================
 
-DELIMITER //
+DELIMITER / /
 
 CREATE PROCEDURE sp_audit_log(
     IN p_action    VARCHAR(20),
@@ -500,7 +494,7 @@ BEGIN
     VALUES (@session_id, @current_user_id, p_action, p_table, p_target_id, 'success');
 END //
 
-DELIMITER ;
+DELIMITER;
 
 -- ============================================================
 -- AUDIT TRIGGERS - All 14 project tables
@@ -508,7 +502,7 @@ DELIMITER ;
 -- BEFORE UPDATE, BEFORE DELETE
 -- ============================================================
 
-DELIMITER //
+DELIMITER / /
 
 -- Category triggers
 CREATE TRIGGER trg_category_ai AFTER INSERT ON Category FOR EACH ROW
@@ -650,7 +644,7 @@ BEGIN CALL sp_audit_log('UPDATE', 'Message', OLD.MessageID); END //
 CREATE TRIGGER trg_message_bd BEFORE DELETE ON Message FOR EACH ROW
 BEGIN CALL sp_audit_log('DELETE', 'Message', OLD.MessageID); END //
 
-DELIMITER ;
+DELIMITER;
 
 -- ============================================================
 -- SEED DATA

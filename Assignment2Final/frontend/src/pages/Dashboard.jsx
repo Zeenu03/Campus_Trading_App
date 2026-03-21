@@ -73,18 +73,12 @@ function AdminDashboard() {
 function MemberDashboard() {
   const { user } = useAuth();
   const [listings, setListings] = useState([]);
-  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/listings', { status: 'Listed', page: 1, page_size: 6 }),
-      api.get('/notifications', { page: 1, page_size: 5 }),
-    ])
-      .then(([l, n]) => {
-        setListings(l?.data || []);
-        setNotifications(n?.data?.filter(n => !n.is_read) || []);
-      })
+    api
+      .get('/listings', { status: 'Listed', page: 1, page_size: 6 })
+      .then((l) => setListings(l?.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -100,19 +94,6 @@ function MemberDashboard() {
         </div>
         <Link to="/listings/new" className="btn-primary text-sm">+ Post Listing</Link>
       </div>
-
-      {notifications.length > 0 && (
-        <div className="card border-l-4 border-blue-500">
-          <h2 className="text-base font-semibold mb-3">Unread Notifications</h2>
-          <div className="space-y-2">
-            {notifications.map(n => (
-              <div key={n.notification_id} className="text-sm text-gray-700 py-1 border-b last:border-0">
-                <span className="font-medium">{n.title}: </span>{n.message}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div>
         <div className="flex items-center justify-between mb-4">

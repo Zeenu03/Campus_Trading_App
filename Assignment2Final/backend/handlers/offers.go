@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	appdb "campus-trading/db"
@@ -180,11 +181,11 @@ func CreateOffer(w http.ResponseWriter, r *http.Request) {
 		`INSERT IGNORE INTO Watchlist (MemberID, ListingID) VALUES (?, ?)`,
 		memberID, listingID)
 
-	// Notify seller
+	offerMsg := fmt.Sprintf("You received a new offer of %.2f on your listing.", body.OfferedPrice)
 	_, _ = tx.ExecContext(ctx,
 		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID)
-         VALUES (?, 'OfferReceived', 'New Offer', 'You received a new offer on your listing', ?, ?)`,
-		sellerID, listingID, offerID)
+         VALUES (?, 'OfferReceived', 'New offer', ?, ?, ?)`,
+		sellerID, offerMsg, listingID, offerID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusCreated, map[string]interface{}{"offer_id": offerID, "message": "offer submitted"})
@@ -277,18 +278,31 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	txID, _ := res.LastInsertId()
 
-	// Create transactions for each auto-declined offer; status/reason derived from offer row.
+	// Create transactions for each auto-declined offer; notify each losing buyer.
 	for _, o := range others {
-		_, _ = tx.ExecContext(ctx,
+		resDecl, errDecl := tx.ExecContext(ctx,
 			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
              VALUES (?, ?, ?, ?, ?)`,
 			listingID, sellerID, o.buyerID, o.id, o.price)
+		if errDecl != nil {
+			continue
+		}
+		declTxID, _ := resDecl.LastInsertId()
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
+             VALUES (?, 'OfferDeclined', 'Offer Declined', ?, ?, ?, ?)`,
+			o.buyerID, "Another buyer's offer was accepted on this listing. Your offer was declined.", listingID, o.id, declTxID)
 	}
 
 	_, _ = tx.ExecContext(ctx,
 		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
          VALUES (?, 'OfferAccepted', 'Offer Accepted', 'Your offer has been accepted!', ?, ?, ?)`,
 		buyerID, listingID, offerID, txID)
+
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
+         VALUES (?, 'TransactionCompleted', 'Sale recorded', 'You accepted an offer. A transaction was created for your listing.', ?, ?, ?)`,
+		sellerID, listingID, offerID, txID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusOK, map[string]interface{}{"transaction_id": txID, "message": "offer accepted"})
@@ -357,10 +371,17 @@ func DeclineOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	txID, _ := res.LastInsertId()
 
+	declineMsg := "Your offer was declined."
+	if body.Reason != "" {
+		declineMsg = fmt.Sprintf("Your offer was declined. Reason: %s", body.Reason)
+		if len(declineMsg) > 1000 {
+			declineMsg = declineMsg[:997] + "..."
+		}
+	}
 	_, _ = tx.ExecContext(ctx,
 		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
-         VALUES (?, 'OfferDeclined', 'Offer Declined', 'Your offer was declined.', ?, ?, ?)`,
-		buyerID, listingID, offerID, txID)
+         VALUES (?, 'OfferDeclined', 'Offer Declined', ?, ?, ?, ?)`,
+		buyerID, declineMsg, listingID, offerID, txID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusOK, map[string]string{"message": "offer declined"})
@@ -486,9 +507,23 @@ func UpdateOfferPrice(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
-	_, _ = tx.ExecContext(ctx,
+	_, err = tx.ExecContext(ctx,
 		`UPDATE Offer SET OfferedPrice = ? WHERE OfferID = ? AND OfferStatus = 'Submitted'`,
 		body.OfferedPrice, offerID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+
+	var listID, sellerID int
+	_ = tx.QueryRowContext(ctx,
+		`SELECT o.ListingID, l.SellerID FROM Offer o JOIN Listing l ON l.ListingID = o.ListingID WHERE o.OfferID = ?`,
+		offerID).Scan(&listID, &sellerID)
+	msg := fmt.Sprintf("A buyer updated their offer price to %.2f on your listing.", body.OfferedPrice)
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID)
+         VALUES (?, 'OfferReceived', 'Offer updated', ?, ?, ?)`,
+		sellerID, msg, listID, offerID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusOK, map[string]string{"message": "offer price updated"})
@@ -548,6 +583,15 @@ func BuyerAcceptOffer(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
+
+	var listID, sellerID int
+	_ = tx.QueryRowContext(ctx,
+		`SELECT o.ListingID, l.SellerID FROM Offer o JOIN Listing l ON l.ListingID = o.ListingID WHERE o.OfferID = ?`,
+		offerID).Scan(&listID, &sellerID)
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID)
+         VALUES (?, 'General', 'Buyer matched price', 'A buyer updated their offer to match your current asking price.', ?, ?)`,
+		sellerID, listID, offerID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -615,6 +659,15 @@ func UpdateSellerAskingPrice(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
+
+	var listID, buyerID int
+	_ = tx.QueryRowContext(ctx,
+		`SELECT o.ListingID, o.BuyerID FROM Offer o WHERE o.OfferID = ?`, offerID).Scan(&listID, &buyerID)
+	msg := fmt.Sprintf("The seller set a counter price of %.2f for your offer.", body.SellerAskingPrice)
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID)
+         VALUES (?, 'General', 'Counter offer', ?, ?, ?)`,
+		buyerID, msg, listID, offerID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusOK, map[string]interface{}{

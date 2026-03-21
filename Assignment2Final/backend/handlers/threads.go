@@ -3,7 +3,9 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	appdb "campus-trading/db"
 	mw "campus-trading/middleware"
@@ -109,6 +111,24 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 		_ = tx.QueryRowContext(ctx,
 			`SELECT ThreadID FROM MessageThread WHERE ListingID = ? AND BuyerID = ?`,
 			listingID, memberID).Scan(&threadID)
+	}
+
+	rowsAff, _ := res.RowsAffected()
+	if rowsAff > 0 {
+		var title string
+		_ = tx.QueryRowContext(ctx, `SELECT Title FROM Listing WHERE ListingID = ?`, listingID).Scan(&title)
+		title = strings.TrimSpace(title)
+		if title == "" {
+			title = "your listing"
+		}
+		chatMsg := fmt.Sprintf("A buyer started a chat about \"%s\".", title)
+		if len(chatMsg) > 1000 {
+			chatMsg = chatMsg[:997] + "..."
+		}
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
+			 VALUES (?, 'General', 'New chat', ?, ?)`,
+			sellerID, chatMsg, listingID)
 	}
 
 	_ = tx.Commit()
@@ -277,11 +297,13 @@ func SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	var buyerID, sellerID int
 	var isActive bool
+	var msgListingID int
+	var listingTitle string
 	err = appdb.DB.QueryRowContext(ctx,
-		`SELECT mt.BuyerID, l.SellerID, mt.IsActive
+		`SELECT mt.BuyerID, l.SellerID, mt.IsActive, mt.ListingID, l.Title
           FROM MessageThread mt JOIN Listing l ON l.ListingID = mt.ListingID
           WHERE mt.ThreadID = ?`, threadID,
-	).Scan(&buyerID, &sellerID, &isActive)
+	).Scan(&buyerID, &sellerID, &isActive, &msgListingID, &listingTitle)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "thread not found")
 		return
@@ -319,6 +341,27 @@ func SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msgID, _ := res.LastInsertId()
+
+	recipientID := sellerID
+	if memberID == sellerID {
+		recipientID = buyerID
+	}
+	preview := strings.TrimSpace(body.MessageText)
+	if len(preview) > 140 {
+		preview = preview[:137] + "..."
+	}
+	lt := strings.TrimSpace(listingTitle)
+	if lt == "" {
+		lt = "a listing"
+	}
+	notifBody := fmt.Sprintf("New message about \"%s\": %s", lt, preview)
+	if len(notifBody) > 1000 {
+		notifBody = notifBody[:997] + "..."
+	}
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
+		 VALUES (?, 'General', 'New message', ?, ?)`,
+		recipientID, notifBody, msgListingID)
 
 	_ = tx.Commit()
 	respondJSON(w, http.StatusCreated, map[string]interface{}{"message_id": msgID, "message": "sent"})

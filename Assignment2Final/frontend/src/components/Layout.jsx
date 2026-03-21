@@ -1,6 +1,7 @@
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import NotificationBell from './NotificationBell';
 
 export default function Layout({ children = <Outlet /> }) {
   const { user, logout, isAdmin } = useAuth();
@@ -50,6 +51,7 @@ export default function Layout({ children = <Outlet /> }) {
                   {isAdmin() && (
                     <span className="badge-red text-xs">Admin</span>
                   )}
+                  <NotificationBell />
                   <Link
                     to={`/portfolio/${user.member_id || 'me'}`}
                     className="text-sm text-gray-600 hover:text-gray-900 hidden sm:block"

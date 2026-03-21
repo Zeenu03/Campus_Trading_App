@@ -206,6 +206,23 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	}
 	listingID, _ := res.LastInsertId()
 
+	if body.WishRequestID != nil && *body.WishRequestID > 0 {
+		var requesterID int
+		errWR := tx.QueryRowContext(ctx,
+			`SELECT RequesterID FROM WishRequest WHERE WishRequestID = ? AND Status = 'Active'`,
+			*body.WishRequestID).Scan(&requesterID)
+		if errWR == nil && requesterID != memberID {
+			matchMsg := fmt.Sprintf("A new listing \"%s\" was posted that may match your wish request.", body.Title)
+			if len(matchMsg) > 1000 {
+				matchMsg = matchMsg[:997] + "..."
+			}
+			_, _ = tx.ExecContext(ctx,
+				`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
+				 VALUES (?, 'WishRequestMatched', 'Wish request match', ?, ?)`,
+				requesterID, matchMsg, listingID)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		respondError(w, http.StatusInternalServerError, "commit failed")
 		return
@@ -479,6 +496,13 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newStatus := cur.Status
+	if v, ok := patch["status"]; ok {
+		newStatus = v.(string)
+	}
+	priceDropped := patch["asking_price"] != nil && newStatus == "Listed" && nextPrice < cur.AskingPrice
+	statusChanged := patch["status"] != nil && newStatus != cur.Status
+
 	var setClauses []string
 	var args []interface{}
 
@@ -518,6 +542,34 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "update failed: "+err.Error())
 		return
 	}
+
+	if priceDropped || statusChanged {
+		wRows, wErr := tx.QueryContext(ctx, `SELECT MemberID FROM Watchlist WHERE ListingID = ?`, listingID)
+		if wErr == nil {
+			for wRows.Next() {
+				var wid int
+				if wRows.Scan(&wid) != nil {
+					continue
+				}
+				if priceDropped {
+					pdMsg := fmt.Sprintf("A listing on your watchlist now has asking price %.2f (reduced).", nextPrice)
+					_, _ = tx.ExecContext(ctx,
+						`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
+						 VALUES (?, 'PriceDropped', 'Price dropped', ?, ?)`,
+						wid, pdMsg, listingID)
+				}
+				if statusChanged {
+					scMsg := fmt.Sprintf("A listing on your watchlist changed status to %s.", newStatus)
+					_, _ = tx.ExecContext(ctx,
+						`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
+						 VALUES (?, 'StatusChanged', 'Listing status updated', ?, ?)`,
+						wid, scMsg, listingID)
+				}
+			}
+			wRows.Close()
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		respondError(w, http.StatusInternalServerError, "commit failed")
 		return
@@ -599,12 +651,20 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		`UPDATE Offer SET OfferStatus = 'Withdrawn', Reason = ?, ResponseDate = NOW()
          WHERE ListingID = ? AND OfferStatus = 'Submitted'`, reason, listingID)
 
-	// Create a transaction for each affected offer; status/reason are derived from the offer row.
 	for _, ao := range affectedOffers {
-		_, _ = tx.ExecContext(ctx,
+		resTx, errTx := tx.ExecContext(ctx,
 			`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
              VALUES (?, ?, ?, ?, ?)`,
 			listingID, ao.sellerID, ao.buyerID, ao.offerID, ao.price)
+		if errTx != nil {
+			continue
+		}
+		withdrawTxID, _ := resTx.LastInsertId()
+		withdrawMsg := "The seller withdrew this listing. Your submitted offer was closed."
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID, RelatedOfferID, RelatedTransactionID)
+			 VALUES (?, 'General', 'Listing withdrawn', ?, ?, ?, ?)`,
+			ao.buyerID, withdrawMsg, listingID, ao.offerID, withdrawTxID)
 	}
 
 	if err := tx.Commit(); err != nil {
