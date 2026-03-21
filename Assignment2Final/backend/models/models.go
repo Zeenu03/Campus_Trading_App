@@ -58,14 +58,14 @@ type Member struct {
 }
 
 type Administrator struct {
-	AdminID      int        `json:"admin_id"`
-	UserID       int        `json:"user_id"`
-	Name         string     `json:"name"`
-	Email        string     `json:"email,omitempty"` // joined from sys_user
-	Role         string     `json:"role"`
-	CreatedDate  time.Time  `json:"created_date"`
+	AdminID       int        `json:"admin_id"`
+	UserID        int        `json:"user_id"`
+	Name          string     `json:"name"`
+	Email         string     `json:"email,omitempty"` // joined from sys_user
+	Role          string     `json:"role"`
+	CreatedDate   time.Time  `json:"created_date"`
 	LastLoginDate *time.Time `json:"last_login_date"`
-	IsActive     bool       `json:"is_active"`
+	IsActive      bool       `json:"is_active"`
 }
 
 type Category struct {
@@ -75,31 +75,53 @@ type Category struct {
 	IsActive     bool    `json:"is_active"`
 }
 
+type WishRequestSummary struct {
+	WishRequestID   int      `json:"wish_request_id"`
+	RequesterID     int      `json:"requester_id"`
+	RequesterName   string   `json:"requester_name,omitempty"`
+	CategoryName    string   `json:"category_name,omitempty"`
+	ItemDescription string   `json:"item_description"`
+	MinBudget       *float64 `json:"min_budget"`
+	MaxBudget       *float64 `json:"max_budget"`
+	Status          string   `json:"status"`
+}
+
+type ListingSummary struct {
+	ListingID   int     `json:"listing_id"`
+	SellerID    int     `json:"seller_id"`
+	SellerName  string  `json:"seller_name,omitempty"`
+	Title       string  `json:"title"`
+	AskingPrice float64 `json:"asking_price"`
+	Status      string  `json:"status"`
+}
+
 type Listing struct {
-	ListingID               int        `json:"listing_id"`
-	SellerID                int        `json:"seller_id"`
-	SellerName              string     `json:"seller_name,omitempty"` // joined
-	CategoryID              int        `json:"category_id"`
-	CategoryName            string     `json:"category_name,omitempty"` // joined
-	Title                   string     `json:"title"`
-	Description             *string    `json:"description"`
-	AskingPrice             float64    `json:"asking_price"`
-	IsNegotiable            bool       `json:"is_negotiable"`
-	Condition               *string    `json:"condition"`
-	Status                  string     `json:"status"`
-	CreatedDate             time.Time  `json:"created_date"`
-	LastModifiedDate        *time.Time `json:"last_modified_date"`
-	WishRequestID           *int       `json:"wish_request_id"`
-	Images                  []ListingImage `json:"images,omitempty"`
-	WatcherCount            int        `json:"watcher_count"`
-	MyWatchlistID           *int       `json:"my_watchlist_id"` // non-nil when the requesting member is watching
+	ListingID         int                 `json:"listing_id"`
+	SellerID          int                 `json:"seller_id"`
+	SellerName        string              `json:"seller_name,omitempty"` // joined
+	CategoryID        int                 `json:"category_id"`
+	CategoryName      string              `json:"category_name,omitempty"` // joined
+	Title             string              `json:"title"`
+	Description       *string             `json:"description"`
+	AskingPrice       float64             `json:"asking_price"`
+	IsNegotiable      bool                `json:"is_negotiable"`
+	Condition         *string             `json:"condition"`
+	Status            string              `json:"status"`
+	CreatedDate       time.Time           `json:"created_date"`
+	LastModifiedDate  *time.Time          `json:"last_modified_date"`
+	WishRequestID     *int                `json:"wish_request_id"`
+	WishRequestIDs    []int               `json:"wish_request_ids,omitempty"`
+	LinkedWishRequest *WishRequestSummary `json:"linked_wish_request,omitempty"`
+	Images            []ListingImage      `json:"images,omitempty"`
+	WatcherCount      int                 `json:"watcher_count"`
+	MyWatchlistID     *int                `json:"my_watchlist_id"` // non-nil when the requesting member is watching
 }
 
 type ListingImage struct {
-	ImageID     int       `json:"image_id"`
-	ListingID   int       `json:"listing_id"`
-	ImageURL    string    `json:"image_url"`
-	ImageOrder  int       `json:"image_order"`
+	ImageID      int       `json:"image_id"`
+	ListingID    int       `json:"listing_id"`
+	ImageURL     string    `json:"image_url"`
+	ImageOrder   int       `json:"image_order"`
 	UploadedDate time.Time `json:"uploaded_date"`
 }
 
@@ -118,47 +140,59 @@ type Offer struct {
 }
 
 type Transaction struct {
-	TransactionID int       `json:"transaction_id"`
-	ListingID     int       `json:"listing_id"`
-	ListingTitle  string    `json:"listing_title,omitempty"` // joined
-	SellerID      int       `json:"seller_id"`
-	SellerName    string    `json:"seller_name,omitempty"` // joined
-	BuyerID       int       `json:"buyer_id"`
-	BuyerName     string    `json:"buyer_name,omitempty"` // joined
-	OfferID       int       `json:"offer_id"`
-	AgreedPrice   float64   `json:"agreed_price"`
+	TransactionID int     `json:"transaction_id"`
+	ListingID     int     `json:"listing_id"`
+	ListingTitle  string  `json:"listing_title,omitempty"` // joined
+	SellerID      int     `json:"seller_id"`
+	SellerName    string  `json:"seller_name,omitempty"` // joined
+	BuyerID       int     `json:"buyer_id"`
+	BuyerName     string  `json:"buyer_name,omitempty"` // joined
+	OfferID       int     `json:"offer_id"`
+	AgreedPrice   float64 `json:"agreed_price"`
 	// Status and Reason are derived at query time from Offer.OfferStatus and Offer.Reason
 	// via the OfferID FK — not stored redundantly in the Transaction table.
-	Status      string  `json:"status"`
-	Reason      *string `json:"reason"`
-	HasRated    bool    `json:"has_rated"` // true if the requesting user has already submitted a rating
+	Status      string    `json:"status"`
+	Reason      *string   `json:"reason"`
+	HasRated    bool      `json:"has_rated"` // true if the requesting user has already submitted a rating
 	CreatedDate time.Time `json:"created_date"`
 }
 
 type Rating struct {
-	RatingID     int       `json:"rating_id"`
-	TransactionID int      `json:"transaction_id"`
-	RaterID      int       `json:"rater_id"`
-	RaterName    string    `json:"rater_name,omitempty"` // joined
-	RatedID      int       `json:"rated_id"`
-	Stars        int       `json:"stars"`
-	ReviewText   *string   `json:"review_text"`
-	RatingDate   time.Time `json:"rating_date"`
+	RatingID      int       `json:"rating_id"`
+	TransactionID int       `json:"transaction_id"`
+	RaterID       int       `json:"rater_id"`
+	RaterName     string    `json:"rater_name,omitempty"` // joined
+	RatedID       int       `json:"rated_id"`
+	Stars         int       `json:"stars"`
+	ReviewText    *string   `json:"review_text"`
+	RatingDate    time.Time `json:"rating_date"`
 }
 
 type WishRequest struct {
-	WishRequestID     int        `json:"wish_request_id"`
-	RequesterID       int        `json:"requester_id"`
-	RequesterName     string     `json:"requester_name,omitempty"` // joined
-	ItemDescription   string     `json:"item_description"`
-	MinBudget         *float64   `json:"min_budget"`
-	MaxBudget         *float64   `json:"max_budget"`
-	PreferredCondition *string   `json:"preferred_condition"`
-	NeededByDate      *time.Time `json:"needed_by_date"`
-	AdditionalDetails *string    `json:"additional_details"`
-	Status            string     `json:"status"`
-	CreatedDate       time.Time  `json:"created_date"`
-	FulfilledDate     *time.Time `json:"fulfilled_date"`
+	WishRequestID      int                `json:"wish_request_id"`
+	RequesterID        int                `json:"requester_id"`
+	RequesterName      string             `json:"requester_name,omitempty"` // joined
+	CategoryID         int                `json:"category_id"`
+	CategoryName       string             `json:"category_name,omitempty"` // joined
+	ItemDescription    string             `json:"item_description"`
+	MinBudget          *float64           `json:"min_budget"`
+	MaxBudget          *float64           `json:"max_budget"`
+	PreferredCondition *string            `json:"preferred_condition"`
+	NeededByDate       *time.Time         `json:"needed_by_date"`
+	AdditionalDetails  *string            `json:"additional_details"`
+	Status             string             `json:"status"`
+	CreatedDate        time.Time          `json:"created_date"`
+	FulfilledDate      *time.Time         `json:"fulfilled_date"`
+	LinkedListing      *ListingSummary    `json:"linked_listing,omitempty"`
+	Images             []WishRequestImage `json:"images,omitempty"`
+}
+
+type WishRequestImage struct {
+	ImageID       int       `json:"image_id"`
+	WishRequestID int       `json:"wish_request_id"`
+	ImageURL      string    `json:"image_url"`
+	ImageOrder    int       `json:"image_order"`
+	UploadedDate  time.Time `json:"uploaded_date"`
 }
 
 type Watchlist struct {
@@ -187,34 +221,34 @@ type Report struct {
 }
 
 type Notification struct {
-	NotificationID      int        `json:"notification_id"`
-	RecipientID         int        `json:"recipient_id"`
-	NotificationType    string     `json:"notification_type"`
-	Title               *string    `json:"title"`
-	Message             string     `json:"message"`
-	RelatedListingID    *int       `json:"related_listing_id"`
-	RelatedOfferID      *int       `json:"related_offer_id"`
-	RelatedTransactionID *int      `json:"related_transaction_id"`
-	IsRead              bool       `json:"is_read"`
-	CreatedDate         time.Time  `json:"created_date"`
-	ReadDate            *time.Time `json:"read_date"`
+	NotificationID       int        `json:"notification_id"`
+	RecipientID          int        `json:"recipient_id"`
+	NotificationType     string     `json:"notification_type"`
+	Title                *string    `json:"title"`
+	Message              string     `json:"message"`
+	RelatedListingID     *int       `json:"related_listing_id"`
+	RelatedOfferID       *int       `json:"related_offer_id"`
+	RelatedTransactionID *int       `json:"related_transaction_id"`
+	IsRead               bool       `json:"is_read"`
+	CreatedDate          time.Time  `json:"created_date"`
+	ReadDate             *time.Time `json:"read_date"`
 }
 
 type MessageThread struct {
-	ThreadID           int        `json:"thread_id"`
-	ListingID          int        `json:"listing_id"`
-	BuyerID            int        `json:"buyer_id"`
-	BuyerName          string     `json:"buyer_name,omitempty"` // joined
-	OfferID            *int       `json:"offer_id"`
-	OfferedPrice       *float64   `json:"offered_price"`        // joined from Offer
-	SellerAskingPrice  *float64   `json:"seller_asking_price"`  // per-offer counter price; nil = use AskingPrice
-	AgreedPrice        *float64   `json:"agreed_price"`         // joined from Offer
-	OfferStatus        *string    `json:"offer_status"`         // joined from Offer
-	OfferReason        *string    `json:"offer_reason"`         // joined from Offer
-	AskingPrice        float64    `json:"asking_price"`         // listing global asking price
-	LastMessagePreview *string    `json:"last_message_preview"` // subquery
-	CreatedDate        time.Time  `json:"created_at"`
-	IsActive           bool       `json:"is_active"`
+	ThreadID           int       `json:"thread_id"`
+	ListingID          int       `json:"listing_id"`
+	BuyerID            int       `json:"buyer_id"`
+	BuyerName          string    `json:"buyer_name,omitempty"` // joined
+	OfferID            *int      `json:"offer_id"`
+	OfferedPrice       *float64  `json:"offered_price"`        // joined from Offer
+	SellerAskingPrice  *float64  `json:"seller_asking_price"`  // per-offer counter price; nil = use AskingPrice
+	AgreedPrice        *float64  `json:"agreed_price"`         // joined from Offer
+	OfferStatus        *string   `json:"offer_status"`         // joined from Offer
+	OfferReason        *string   `json:"offer_reason"`         // joined from Offer
+	AskingPrice        float64   `json:"asking_price"`         // listing global asking price
+	LastMessagePreview *string   `json:"last_message_preview"` // subquery
+	CreatedDate        time.Time `json:"created_at"`
+	IsActive           bool      `json:"is_active"`
 }
 
 type Message struct {
@@ -246,9 +280,9 @@ type RegisterRequest struct {
 }
 
 type AuthResponse struct {
-	User  *Member   `json:"user,omitempty"`
+	User  *Member        `json:"user,omitempty"`
 	Admin *Administrator `json:"admin,omitempty"`
-	Roles []string  `json:"roles"`
+	Roles []string       `json:"roles"`
 }
 
 type PaginatedResponse struct {
@@ -265,10 +299,10 @@ type ErrorResponse struct {
 
 // BenchmarkResult holds EXPLAIN results for one query
 type BenchmarkResult struct {
-	QueryName  string  `json:"query_name"`
-	Query      string  `json:"query"`
-	AccessType string  `json:"type"`
-	RowsExamined *int64 `json:"rows_examined"`
-	Extra      *string `json:"extra"`
-	DurationMs float64 `json:"duration_ms"`
+	QueryName    string  `json:"query_name"`
+	Query        string  `json:"query"`
+	AccessType   string  `json:"type"`
+	RowsExamined *int64  `json:"rows_examined"`
+	Extra        *string `json:"extra"`
+	DurationMs   float64 `json:"duration_ms"`
 }

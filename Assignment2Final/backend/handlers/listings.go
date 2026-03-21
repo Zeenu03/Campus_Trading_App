@@ -35,6 +35,16 @@ var (
 	maxImagesPerListing = 10
 )
 
+func hasListingWishRequestTable(ctx context.Context) bool {
+	var count int
+	err := appdb.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*)
+		   FROM information_schema.TABLES
+		  WHERE TABLE_SCHEMA = DATABASE()
+		    AND TABLE_NAME = 'ListingWishRequest'`).Scan(&count)
+	return err == nil && count > 0
+}
+
 // GET /api/v1/listings — auth, browse with filters
 func ListListings(w http.ResponseWriter, r *http.Request) {
 	page := queryInt(r, "page", 1)
@@ -141,6 +151,8 @@ func ListListings(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/listings — member, create
 func CreateListing(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	expireDueWishRequests(ctx)
+
 	memberID := mw.GetMemberID(ctx)
 	if memberID == 0 {
 		respondError(w, http.StatusForbidden, "member only")
@@ -148,13 +160,14 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		CategoryID    int     `json:"category_id"`
-		Title         string  `json:"title"`
-		Description   *string `json:"description"`
-		AskingPrice   float64 `json:"asking_price"`
-		IsNegotiable  bool    `json:"is_negotiable"`
-		Condition     *string `json:"condition"`
-		WishRequestID *int    `json:"wish_request_id"`
+		CategoryID     int     `json:"category_id"`
+		Title          string  `json:"title"`
+		Description    *string `json:"description"`
+		AskingPrice    float64 `json:"asking_price"`
+		IsNegotiable   bool    `json:"is_negotiable"`
+		Condition      *string `json:"condition"`
+		WishRequestID  *int    `json:"wish_request_id"`
+		WishRequestIDs []int   `json:"wish_request_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid body")
@@ -166,6 +179,27 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.AskingPrice < 0 {
 		respondError(w, http.StatusBadRequest, "asking_price must be >= 0")
+		return
+	}
+
+	selectedWishRequestIDs := make([]int, 0, len(body.WishRequestIDs))
+	seenWishRequest := map[int]struct{}{}
+	for _, id := range body.WishRequestIDs {
+		if id <= 0 {
+			respondError(w, http.StatusBadRequest, "wish_request_ids must contain positive integers")
+			return
+		}
+		if _, seen := seenWishRequest[id]; seen {
+			continue
+		}
+		seenWishRequest[id] = struct{}{}
+		selectedWishRequestIDs = append(selectedWishRequestIDs, id)
+	}
+	if len(selectedWishRequestIDs) == 0 && body.WishRequestID != nil && *body.WishRequestID > 0 {
+		selectedWishRequestIDs = append(selectedWishRequestIDs, *body.WishRequestID)
+	}
+	if len(selectedWishRequestIDs) > 1 {
+		respondError(w, http.StatusBadRequest, "only one wish request can be linked to a listing")
 		return
 	}
 	// Enforce: max 2 active listings if 0 completed transactions
@@ -194,11 +228,16 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
+	legacyWishRequestID := body.WishRequestID
+	if len(selectedWishRequestIDs) > 0 {
+		legacyWishRequestID = &selectedWishRequestIDs[0]
+	}
+
 	res, err := tx.ExecContext(ctx,
 		"INSERT INTO Listing (SellerID, CategoryID, Title, Description, AskingPrice, IsNegotiable, "+
 			"`Condition`, WishRequestID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		memberID, body.CategoryID, body.Title, body.Description, body.AskingPrice, body.IsNegotiable,
-		body.Condition, body.WishRequestID,
+		body.Condition, legacyWishRequestID,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "listing creation failed: "+err.Error())
@@ -206,20 +245,86 @@ func CreateListing(w http.ResponseWriter, r *http.Request) {
 	}
 	listingID, _ := res.LastInsertId()
 
-	if body.WishRequestID != nil && *body.WishRequestID > 0 {
-		var requesterID int
-		errWR := tx.QueryRowContext(ctx,
-			`SELECT RequesterID FROM WishRequest WHERE WishRequestID = ? AND Status = 'Active'`,
-			*body.WishRequestID).Scan(&requesterID)
-		if errWR == nil && requesterID != memberID {
-			matchMsg := fmt.Sprintf("A new listing \"%s\" was posted that may match your wish request.", body.Title)
-			if len(matchMsg) > 1000 {
-				matchMsg = matchMsg[:997] + "..."
+	if len(selectedWishRequestIDs) > 0 {
+		inClause := strings.Repeat("?,", len(selectedWishRequestIDs)-1) + "?"
+		args := make([]interface{}, 0, len(selectedWishRequestIDs))
+		for _, wrID := range selectedWishRequestIDs {
+			args = append(args, wrID)
+		}
+
+		rows, err := tx.QueryContext(ctx,
+			`SELECT WishRequestID, RequesterID
+			   FROM WishRequest
+			  WHERE WishRequestID IN (`+inClause+`)
+			    AND Status = 'Active'
+			    AND (NeededByDate IS NULL OR NeededByDate >= CURDATE())`,
+			args...)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to validate wish requests")
+			return
+		}
+
+		requesterByWishID := map[int]int{}
+		for rows.Next() {
+			var wrID, requesterID int
+			if err := rows.Scan(&wrID, &requesterID); err != nil {
+				rows.Close()
+				respondError(w, http.StatusInternalServerError, "failed to validate wish requests")
+				return
 			}
-			_, _ = tx.ExecContext(ctx,
-				`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
-				 VALUES (?, 'WishRequestMatched', 'Wish request match', ?, ?)`,
-				requesterID, matchMsg, listingID)
+			requesterByWishID[wrID] = requesterID
+		}
+		rows.Close()
+
+		if len(requesterByWishID) != len(selectedWishRequestIDs) {
+			respondError(w, http.StatusBadRequest, "one or more selected wish requests are not active")
+			return
+		}
+
+		if hasWishRequestFulfilledDateColumn(ctx) {
+			updateArgs := append([]interface{}{time.Now()}, args...)
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE WishRequest
+				    SET Status = 'Fulfilled', FulfilledDate = ?
+				  WHERE WishRequestID IN (`+inClause+`) AND Status = 'Active'`,
+				updateArgs...); err != nil {
+				respondError(w, http.StatusInternalServerError, "failed to fulfill wish requests")
+				return
+			}
+		} else {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE WishRequest
+				    SET Status = 'Fulfilled'
+				  WHERE WishRequestID IN (`+inClause+`) AND Status = 'Active'`,
+				args...); err != nil {
+				respondError(w, http.StatusInternalServerError, "failed to fulfill wish requests")
+				return
+			}
+		}
+
+		canLinkWishReq := hasListingWishRequestTable(ctx)
+
+		for _, wrID := range selectedWishRequestIDs {
+			if canLinkWishReq {
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO ListingWishRequest (ListingID, WishRequestID) VALUES (?, ?)`,
+					listingID, wrID); err != nil {
+					respondError(w, http.StatusInternalServerError, "failed to link fulfilled wish requests")
+					return
+				}
+			}
+
+			requesterID := requesterByWishID[wrID]
+			if requesterID != memberID {
+				matchMsg := fmt.Sprintf("Your wish request was fulfilled by new listing \"%s\".", body.Title)
+				if len(matchMsg) > 1000 {
+					matchMsg = matchMsg[:997] + "..."
+				}
+				_, _ = tx.ExecContext(ctx,
+					`INSERT INTO Notification (RecipientID, NotificationType, Title, Message, RelatedListingID)
+					 VALUES (?, 'WishRequestMatched', 'Wish request fulfilled', ?, ?)`,
+					requesterID, matchMsg, listingID)
+			}
 		}
 	}
 
@@ -258,6 +363,43 @@ func loadListingWithImages(ctx context.Context, listingID int, memberID int) (*m
 	l.Condition = cond
 	l.LastModifiedDate = lastMod
 	l.WishRequestID = wishReqID
+
+	wishRows, err := appdb.DB.QueryContext(ctx,
+		`SELECT WishRequestID FROM ListingWishRequest WHERE ListingID = ? ORDER BY WishRequestID`, listingID)
+	if err == nil {
+		defer wishRows.Close()
+		for wishRows.Next() {
+			var linkedWishID int
+			if err := wishRows.Scan(&linkedWishID); err == nil {
+				l.WishRequestIDs = append(l.WishRequestIDs, linkedWishID)
+			}
+		}
+	}
+
+	linkedWishID := 0
+	if l.WishRequestID != nil && *l.WishRequestID > 0 {
+		linkedWishID = *l.WishRequestID
+	} else if len(l.WishRequestIDs) > 0 {
+		linkedWishID = l.WishRequestIDs[0]
+	}
+	if linkedWishID > 0 {
+		var wr models.WishRequestSummary
+		var minBudget, maxBudget *float64
+		err = appdb.DB.QueryRowContext(ctx,
+			`SELECT w.WishRequestID, w.RequesterID, m.Name, c.CategoryName,
+			        w.ItemDescription, w.MinBudget, w.MaxBudget, w.Status
+			   FROM WishRequest w
+			   JOIN Member m ON m.MemberID = w.RequesterID
+			   JOIN Category c ON c.CategoryID = w.CategoryID
+			  WHERE w.WishRequestID = ?`, linkedWishID,
+		).Scan(&wr.WishRequestID, &wr.RequesterID, &wr.RequesterName, &wr.CategoryName,
+			&wr.ItemDescription, &minBudget, &maxBudget, &wr.Status)
+		if err == nil {
+			wr.MinBudget = minBudget
+			wr.MaxBudget = maxBudget
+			l.LinkedWishRequest = &wr
+		}
+	}
 
 	_ = appdb.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM Watchlist WHERE ListingID = ?`, listingID).Scan(&l.WatcherCount)
@@ -631,7 +773,10 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Collect all submitted offers so we can create Declined transactions
-	type submittedOffer struct{ offerID, buyerID, sellerID int; price float64 }
+	type submittedOffer struct {
+		offerID, buyerID, sellerID int
+		price                      float64
+	}
 	var affectedOffers []submittedOffer
 	offerRows, err := tx.QueryContext(ctx,
 		`SELECT o.OfferID, o.BuyerID, l.SellerID, o.OfferedPrice

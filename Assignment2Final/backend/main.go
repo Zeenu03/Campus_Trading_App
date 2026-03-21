@@ -80,46 +80,49 @@ func main() {
 			r.Get("/categories", handlers.ListCategories) // auth
 
 			// Listings
-			r.Get("/listings", handlers.ListListings)                    // auth
-			r.Post("/listings", handlers.CreateListing)                  // member
-			r.Get("/listings/{id}", handlers.GetListing)                 // auth
-			r.Put("/listings/{id}", handlers.UpdateListing)            // own|admin
-			r.Delete("/listings/{id}", handlers.DeleteListing)          // own|admin
-			r.Post("/listings/{id}/images", handlers.AddListingImage)   // own|admin
+			r.Get("/listings", handlers.ListListings)                                // auth
+			r.Post("/listings", handlers.CreateListing)                              // member
+			r.Get("/listings/{id}", handlers.GetListing)                             // auth
+			r.Put("/listings/{id}", handlers.UpdateListing)                          // own|admin
+			r.Delete("/listings/{id}", handlers.DeleteListing)                       // own|admin
+			r.Post("/listings/{id}/images", handlers.AddListingImage)                // own|admin
 			r.Delete("/listings/{id}/images/{imageId}", handlers.DeleteListingImage) // own|admin
 
 			// Offers
-			r.Get("/listings/{id}/my-offer", handlers.GetMyOffer)               // own-buyer
-			r.Get("/listings/{id}/offers", handlers.ListOffersForListing)       // own-seller|admin
-			r.Post("/listings/{id}/offers", handlers.CreateOffer)               // member
-			r.Put("/offers/{id}/accept", handlers.AcceptOffer)                  // own-seller
-			r.Put("/offers/{id}/decline", handlers.DeclineOffer)                // own-seller
-			r.Put("/offers/{id}/withdraw", handlers.WithdrawOffer)              // own-buyer
-			r.Put("/offers/{id}/price", handlers.UpdateOfferPrice)              // own-buyer
-			r.Put("/offers/{id}/buyer-accept", handlers.BuyerAcceptOffer)       // own-buyer (syncs price to asking, does NOT finalise)
+			r.Get("/listings/{id}/my-offer", handlers.GetMyOffer)                // own-buyer
+			r.Get("/listings/{id}/offers", handlers.ListOffersForListing)        // own-seller|admin
+			r.Post("/listings/{id}/offers", handlers.CreateOffer)                // member
+			r.Put("/offers/{id}/accept", handlers.AcceptOffer)                   // own-seller
+			r.Put("/offers/{id}/decline", handlers.DeclineOffer)                 // own-seller
+			r.Put("/offers/{id}/withdraw", handlers.WithdrawOffer)               // own-buyer
+			r.Put("/offers/{id}/price", handlers.UpdateOfferPrice)               // own-buyer
+			r.Put("/offers/{id}/buyer-accept", handlers.BuyerAcceptOffer)        // own-buyer (syncs price to asking, does NOT finalise)
 			r.Put("/offers/{id}/seller-price", handlers.UpdateSellerAskingPrice) // own-seller (per-offer counter price)
 
 			// Threads & Messages
-			r.Get("/listings/{id}/my-thread", handlers.GetMyThread)             // own-buyer
-			r.Post("/listings/{id}/threads", handlers.CreateThread)             // member (chat-only)
-			r.Get("/listings/{id}/interactions", handlers.ListInteractions)     // own-seller|admin
-			r.Get("/threads/{id}/messages", handlers.ListMessages)              // buyer|seller
-			r.Post("/threads/{id}/messages", handlers.SendMessage)              // buyer|seller
+			r.Get("/listings/{id}/my-thread", handlers.GetMyThread)         // own-buyer
+			r.Post("/listings/{id}/threads", handlers.CreateThread)         // member (chat-only)
+			r.Get("/listings/{id}/interactions", handlers.ListInteractions) // own-seller|admin
+			r.Get("/threads/{id}/messages", handlers.ListMessages)          // buyer|seller
+			r.Post("/threads/{id}/messages", handlers.SendMessage)          // buyer|seller
 
 			// Transactions
 			r.Get("/transactions", handlers.ListTransactions)           // auth
 			r.Post("/transactions/{id}/rate", handlers.RateTransaction) // own-party (Accepted only)
 
 			// Wish Requests
-			r.Get("/wishrequests", handlers.ListWishRequests)       // auth
-			r.Post("/wishrequests", handlers.CreateWishRequest)     // member
-			r.Put("/wishrequests/{id}", handlers.UpdateWishRequest) // own
+			r.Get("/wishrequests", handlers.ListWishRequests)                                // auth
+			r.Post("/wishrequests", handlers.CreateWishRequest)                              // member
+			r.Get("/wishrequests/{id}", handlers.GetWishRequest)                             // auth
+			r.Put("/wishrequests/{id}", handlers.UpdateWishRequest)                          // own
+			r.Post("/wishrequests/{id}/images", handlers.AddWishRequestImage)                // own|admin
+			r.Delete("/wishrequests/{id}/images/{imageId}", handlers.DeleteWishRequestImage) // own|admin
 
 			// Watchlist
-			r.Get("/watchlist", handlers.GetWatchlist)                                   // member
-			r.Post("/watchlist", handlers.AddToWatchlist)                                // member
+			r.Get("/watchlist", handlers.GetWatchlist)                                        // member
+			r.Post("/watchlist", handlers.AddToWatchlist)                                     // member
 			r.Delete("/watchlist/listing/{listingId}", handlers.RemoveFromWatchlistByListing) // member (by listing)
-			r.Delete("/watchlist/{id}", handlers.RemoveFromWatchlist)                    // own (by watchlist id)
+			r.Delete("/watchlist/{id}", handlers.RemoveFromWatchlist)                         // own (by watchlist id)
 
 			// Notifications
 			r.Get("/notifications", handlers.ListNotifications)              // member

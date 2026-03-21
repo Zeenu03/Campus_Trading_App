@@ -221,6 +221,8 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// WishRequests
+	expireDueWishRequests(ctx)
+
 	wrRows, _ := appdb.DB.QueryContext(ctx,
 		`SELECT WishRequestID, ItemDescription, Status, CreatedDate
          FROM WishRequest WHERE RequesterID = ? ORDER BY CreatedDate DESC`, memberID)
@@ -284,9 +286,9 @@ func GetPortfolio(w http.ResponseWriter, r *http.Request) {
 			"room_number":    room,
 			"bio":            bio,
 			"image":          img,
-			"is_verified": m.IsVerified,
-			"is_active":   m.IsActive,
-			"created_date": m.AccountCreationDate,
+			"is_verified":    m.IsVerified,
+			"is_active":      m.IsActive,
+			"created_date":   m.AccountCreationDate,
 		},
 		"listings":      listings,
 		"transactions":  transactions,
