@@ -52,8 +52,7 @@ class BPlusTree:
         """
         Search for a key in the B+ Tree.
 
-        Time Complexity: O(log_m n) where m = order, n = number of keys
-
+        Time Complexity: O(log_m n) where m = order, n = number of keys)
         Args:
             key: The key to search for
 
@@ -66,7 +65,7 @@ class BPlusTree:
     def _find_leaf(self, key: Any) -> LeafNode:
         """
         Traverse from root to the appropriate leaf node for a key.
-
+        
         Args:
             key: The key to search for
 
@@ -131,45 +130,6 @@ class BPlusTree:
         if leaf.is_full():
             self._split_leaf(leaf)
 
-    def _insert_non_full(self, node: Node, key: Any, value: Any) -> None:
-        """
-        Recursive helper to insert into a non-full node.
-
-        Args:
-            node: Current node
-            key: Key to insert
-            value: Associated value
-        """
-        if node.is_leaf():
-            pos = self._find_position(node.keys, key)
-            node.insert_at(pos, key, value)
-        else:
-            # Find appropriate child
-            child_idx = node.find_child_index(key)
-            child = node.children[child_idx]
-
-            # Recursively insert
-            self._insert_non_full(child, key, value)
-
-            # Split child if it became full
-            if child.is_full():
-                self._split_child(node, child_idx)
-
-    def _split_child(self, parent: InternalNode, index: int) -> None:
-        """
-        Split the child at given index.
-
-        Args:
-            parent: Parent node containing the child
-            index: Index of the child to split
-        """
-        child = parent.children[index]
-
-        if child.is_leaf():
-            self._split_leaf_at_parent(parent, index, child)
-        else:
-            self._split_internal_at_parent(parent, index, child)
-
     def _split_leaf(self, leaf: LeafNode) -> None:
         """
         Split a full leaf node.
@@ -200,85 +160,6 @@ class BPlusTree:
         # Promote first key of new leaf to parent
         promote_key = new_leaf.keys[0]
         self._insert_into_parent(leaf, promote_key, new_leaf)
-
-    def _split_leaf_at_parent(self, parent: InternalNode, index: int, leaf: LeafNode) -> None:
-        """Split a leaf node that has a known parent."""
-        new_leaf = LeafNode(self.order)
-        mid = len(leaf.keys) // 2
-
-        # Move upper half to new leaf
-        new_leaf.keys = leaf.keys[mid:]
-        new_leaf.values = leaf.values[mid:]
-        leaf.keys = leaf.keys[:mid]
-        leaf.values = leaf.values[:mid]
-
-        # Update linked list
-        new_leaf.next = leaf.next
-        new_leaf.prev = leaf
-        if leaf.next:
-            leaf.next.prev = new_leaf
-        leaf.next = new_leaf
-
-        # Insert into parent
-        promote_key = new_leaf.keys[0]
-        parent.keys.insert(index, promote_key)
-        parent.children.insert(index + 1, new_leaf)
-        new_leaf.parent = parent
-
-    def _split_internal(self, node: InternalNode) -> None:
-        """
-        Split a full internal node.
-
-        Creates a new internal node with the upper half,
-        promotes the middle key to the parent (not copied),
-        and redistributes children.
-
-        Args:
-            node: The internal node to split
-        """
-        new_node = InternalNode(self.order)
-        mid = len(node.keys) // 2
-
-        # The middle key is promoted, not copied
-        promote_key = node.keys[mid]
-
-        # Move upper half to new node
-        new_node.keys = node.keys[mid + 1:]
-        new_node.children = node.children[mid + 1:]
-
-        # Update children's parent pointers
-        for child in new_node.children:
-            child.parent = new_node
-
-        # Keep lower half in original node
-        node.keys = node.keys[:mid]
-        node.children = node.children[:mid + 1]
-
-        self._insert_into_parent(node, promote_key, new_node)
-
-    def _split_internal_at_parent(self, parent: InternalNode, index: int, node: InternalNode) -> None:
-        """Split an internal node that has a known parent."""
-        new_node = InternalNode(self.order)
-        mid = len(node.keys) // 2
-
-        promote_key = node.keys[mid]
-
-        # Move upper half to new node
-        new_node.keys = node.keys[mid + 1:]
-        new_node.children = node.children[mid + 1:]
-
-        # Update children's parent pointers
-        for child in new_node.children:
-            child.parent = new_node
-
-        # Keep lower half
-        node.keys = node.keys[:mid]
-        node.children = node.children[:mid + 1]
-
-        # Insert into parent
-        parent.keys.insert(index, promote_key)
-        parent.children.insert(index + 1, new_node)
-        new_node.parent = parent
 
     def _insert_into_parent(self, left_child: Node, key: Any, right_child: Node) -> None:
         """
@@ -313,6 +194,38 @@ class BPlusTree:
             # Split parent if necessary
             if parent.is_full():
                 self._split_internal(parent)
+
+
+    def _split_internal(self, node: InternalNode) -> None:
+        """
+        Split a full internal node.
+
+        Creates a new internal node with the upper half,
+        promotes the middle key to the parent (not copied),
+        and redistributes children.
+
+        Args:
+            node: The internal node to split
+        """
+        new_node = InternalNode(self.order)
+        mid = len(node.keys) // 2
+
+        # The middle key is promoted, not copied
+        promote_key = node.keys[mid]
+
+        # Move upper half to new node
+        new_node.keys = node.keys[mid + 1:]
+        new_node.children = node.children[mid + 1:]
+
+        # Update children's parent pointers
+        for child in new_node.children:
+            child.parent = new_node
+
+        # Keep lower half in original node
+        node.keys = node.keys[:mid]
+        node.children = node.children[:mid + 1]
+
+        self._insert_into_parent(node, promote_key, new_node)
 
     # ==================== DELETE OPERATIONS ====================
 
@@ -349,34 +262,6 @@ class BPlusTree:
             self._handle_leaf_underflow(leaf)
 
         return True
-
-    def _delete(self, node: Node, key: Any) -> bool:
-        """
-        Recursive helper for deletion.
-
-        Args:
-            node: Current node
-            key: Key to delete
-
-        Returns:
-            True if deleted, False if not found
-        """
-        if node.is_leaf():
-            try:
-                idx = node.keys.index(key)
-                node.remove_at(idx)
-                return True
-            except ValueError:
-                return False
-        else:
-            # Find appropriate child
-            child_idx = node.find_child_index(key)
-            result = self._delete(node.children[child_idx], key)
-
-            if result and node.children[child_idx].is_underflow():
-                self._fill_child(node, child_idx)
-
-            return result
 
     def _handle_leaf_underflow(self, leaf: LeafNode) -> None:
         """
@@ -417,6 +302,38 @@ class BPlusTree:
         else:
             self._merge(parent, idx)
 
+    def _merge(self, parent: InternalNode, index: int) -> None:
+        """
+        Merge child at index with child at index+1 (leaf nodes).
+
+        Args:
+            parent: Parent node
+            index: Index of the left child to merge
+        """
+        left_child = parent.children[index]
+        right_child = parent.children[index + 1]
+
+        # Merge keys and values
+        left_child.keys.extend(right_child.keys)
+        left_child.values.extend(right_child.values)
+
+        # Update linked list
+        left_child.next = right_child.next
+        if right_child.next:
+            right_child.next.prev = left_child
+
+        # Remove separator key and right child from parent
+        parent.keys.pop(index)
+        parent.children.pop(index + 1)
+
+        # Handle parent underflow
+        if parent == self.root:
+            if not parent.keys:
+                self.root = left_child
+                left_child.parent = None
+        elif parent.is_underflow():
+            self._handle_internal_underflow(parent)
+            
     def _handle_internal_underflow(self, node: InternalNode) -> None:
         """Handle underflow in an internal node."""
         if node == self.root:
@@ -450,44 +367,33 @@ class BPlusTree:
         else:
             self._merge_internal(parent, idx)
 
-    def _fill_child(self, node: InternalNode, index: int) -> None:
-        """
-        Ensure child at given index has enough keys.
+    def _merge_internal(self, parent: InternalNode, index: int) -> None:
+        """Merge internal nodes."""
+        left_child = parent.children[index]
+        right_child = parent.children[index + 1]
 
-        Args:
-            node: Parent node
-            index: Index of the child to fill
-        """
-        child = node.children[index]
-        min_keys = child.min_keys()
+        # Pull down separator key from parent
+        left_child.keys.append(parent.keys[index])
 
-        # Try borrowing from left sibling
-        if index > 0 and len(node.children[index - 1].keys) > min_keys:
-            if child.is_leaf():
-                self._borrow_from_prev(node, index)
-            else:
-                self._borrow_from_prev_internal(node, index)
-            return
+        # Merge keys and children
+        left_child.keys.extend(right_child.keys)
+        left_child.children.extend(right_child.children)
 
-        # Try borrowing from right sibling
-        if index < len(node.children) - 1 and len(node.children[index + 1].keys) > min_keys:
-            if child.is_leaf():
-                self._borrow_from_next(node, index)
-            else:
-                self._borrow_from_next_internal(node, index)
-            return
+        # Update parent pointers for moved children
+        for child in right_child.children:
+            child.parent = left_child
 
-        # Merge with sibling
-        if index < len(node.children) - 1:
-            if child.is_leaf():
-                self._merge(node, index)
-            else:
-                self._merge_internal(node, index)
-        else:
-            if child.is_leaf():
-                self._merge(node, index - 1)
-            else:
-                self._merge_internal(node, index - 1)
+        # Remove from parent
+        parent.keys.pop(index)
+        parent.children.pop(index + 1)
+
+        # Handle parent underflow
+        if parent == self.root:
+            if not parent.keys:
+                self.root = left_child
+                left_child.parent = None
+        elif parent.is_underflow():
+            self._handle_internal_underflow(parent)
 
     def _borrow_from_prev(self, parent: InternalNode, index: int) -> None:
         """
@@ -524,7 +430,7 @@ class BPlusTree:
 
         # Update parent key
         parent.keys[index] = right_sibling.keys[0]
-
+            
     def _borrow_from_prev_internal(self, parent: InternalNode, index: int) -> None:
         """Borrow from left sibling for internal nodes."""
         child = parent.children[index]
@@ -556,66 +462,6 @@ class BPlusTree:
         moved_child = right_sibling.children.pop(0)
         child.children.append(moved_child)
         moved_child.parent = child
-
-    def _merge(self, parent: InternalNode, index: int) -> None:
-        """
-        Merge child at index with child at index+1 (leaf nodes).
-
-        Args:
-            parent: Parent node
-            index: Index of the left child to merge
-        """
-        left_child = parent.children[index]
-        right_child = parent.children[index + 1]
-
-        # Merge keys and values
-        left_child.keys.extend(right_child.keys)
-        left_child.values.extend(right_child.values)
-
-        # Update linked list
-        left_child.next = right_child.next
-        if right_child.next:
-            right_child.next.prev = left_child
-
-        # Remove separator key and right child from parent
-        parent.keys.pop(index)
-        parent.children.pop(index + 1)
-
-        # Handle parent underflow
-        if parent == self.root:
-            if not parent.keys:
-                self.root = left_child
-                left_child.parent = None
-        elif parent.is_underflow():
-            self._handle_internal_underflow(parent)
-
-    def _merge_internal(self, parent: InternalNode, index: int) -> None:
-        """Merge internal nodes."""
-        left_child = parent.children[index]
-        right_child = parent.children[index + 1]
-
-        # Pull down separator key from parent
-        left_child.keys.append(parent.keys[index])
-
-        # Merge keys and children
-        left_child.keys.extend(right_child.keys)
-        left_child.children.extend(right_child.children)
-
-        # Update parent pointers for moved children
-        for child in right_child.children:
-            child.parent = left_child
-
-        # Remove from parent
-        parent.keys.pop(index)
-        parent.children.pop(index + 1)
-
-        # Handle parent underflow
-        if parent == self.root:
-            if not parent.keys:
-                self.root = left_child
-                left_child.parent = None
-        elif parent.is_underflow():
-            self._handle_internal_underflow(parent)
 
     # ==================== UPDATE OPERATION ====================
 
