@@ -31,9 +31,14 @@ func Init() {
 		user := getEnv("DB_USER", "root")
 		pass := getEnv("DB_PASSWORD", "")
 		name := getEnv("DB_NAME", "CampusTradingB")
-		// loc=Asia%2FKolkata tells the MySQL driver to interpret DATETIME values as IST.
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Asia%%2FKolkata",
-			user, pass, host, port, name)
+		// loc=Asia%2FKolkata  — driver parses DATETIME values back into IST time.Time.
+		// time_zone=%2B05%3A30 — driver issues SET time_zone='+05:30' on EVERY new
+		//   connection it opens, so CURRENT_TIMESTAMP(3) in triggers and table defaults
+		//   always produces IST regardless of MySQL's global timezone setting.
+		dsn = fmt.Sprintf(
+			"%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Asia%%2FKolkata&time_zone=%%2B05%%3A30",
+			user, pass, host, port, name,
+		)
 	}
 
 	DB, err = sql.Open("mysql", dsn)
@@ -47,11 +52,6 @@ func Init() {
 
 	if err = DB.Ping(); err != nil {
 		log.Fatalf("db: failed to ping MySQL: %v", err)
-	}
-
-	// Ensure every MySQL connection uses IST for NOW() / CURRENT_TIMESTAMP.
-	if _, err = DB.Exec("SET time_zone = '+05:30'"); err != nil {
-		log.Fatalf("db: failed to set timezone: %v", err)
 	}
 
 	log.Println("db: connected to MySQL (timezone: IST UTC+05:30)")

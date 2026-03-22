@@ -15,18 +15,54 @@ import (
 )
 
 // GET /api/v1/admin/audit-log — admin, paginated
+// Query params:
+//   page, page_size  — pagination
+//   source           — "api" (ip_address IS NOT NULL) | "trigger" (ip_address IS NULL)
+//   status           — "success" | "fail"
+//   unauthorized     — "1"  → session_id IS NULL with write action (INSERT/UPDATE/DELETE)
 func GetAuditLog(w http.ResponseWriter, r *http.Request) {
-	page := queryInt(r, "page", 1)
-	pageSize := queryInt(r, "page_size", 20)
+	page     := queryInt(r, "page", 1)
+	pageSize := queryInt(r, "page_size", 50)
+
+	q := r.URL.Query()
+	source       := q.Get("source")       // "api" | "trigger" | ""
+	statusFilter := q.Get("status")       // "success" | "fail" | ""
+	unauthorized := q.Get("unauthorized") // "1" | ""
+
+	// Build WHERE clauses dynamically
+	where := " WHERE 1=1"
+	var args []interface{}
+
+	switch source {
+	case "api":
+		where += " AND ip_address IS NOT NULL"
+	case "trigger":
+		where += " AND ip_address IS NULL"
+	}
+
+	switch statusFilter {
+	case "success", "fail":
+		where += " AND status = ?"
+		args = append(args, statusFilter)
+	}
+
+	if unauthorized == "1" {
+		where += " AND session_id IS NULL AND action IN ('INSERT','UPDATE','DELETE')"
+	}
 
 	var total int
-	_ = appdb.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM audit_log`).Scan(&total)
+	_ = appdb.DB.QueryRowContext(r.Context(),
+		"SELECT COUNT(*) FROM audit_log"+where, args...).Scan(&total)
 
 	offset, totalPages := paginate(page, pageSize, total)
 
+	// ORDER BY log_id DESC — log_id is AUTO_INCREMENT so it is strictly monotonic
+	// and breaks timestamp ties perfectly (trigger rows and middleware rows for the
+	// same request share the same DATETIME(3) value but have distinct log_ids).
+	queryArgs := append(args, pageSize, offset)
 	rows, err := appdb.DB.QueryContext(r.Context(),
 		`SELECT log_id, timestamp, session_id, user_id, action, target_table, target_id, ip_address, status
-         FROM audit_log ORDER BY timestamp DESC LIMIT ? OFFSET ?`, pageSize, offset)
+         FROM audit_log`+where+` ORDER BY log_id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "query failed")
 		return

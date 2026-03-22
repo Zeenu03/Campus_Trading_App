@@ -64,11 +64,11 @@ func main() {
 	hashStr := string(hash)
 
 	samples := []sampleMember{
-		{"sample.user1@iitgn.ac.in", "Priya Sharma", "9876543210", "Computer Science", 2, "Apex", "101", "CS undergrad, interested in systems."},
-		{"sample.user2@iitgn.ac.in", "Arjun Mehta", "9876543211", "Electrical Engineering", 3, "Nilgiri", "205", ""},
-		{"sample.user3@iitgn.ac.in", "Sneha Iyer", "9876543212", "Mechanical Engineering", 1, "Himadri", "312", "First year — looking for textbooks."},
-		{"sample.user4@iitgn.ac.in", "Rahul Verma", "9876543213", "Chemical Engineering", 4, "Vindhya", "408", ""},
-		{"sample.user5@iitgn.ac.in", "Ananya Patel", "9876543214", "Materials Science", 2, "Apex", "118", "Lab gear and notes sometimes."},
+		{"sample.user1@iitgn.ac.in", "Priya Sharma", "9876543210", "Computer Science", 2, "Aaiban", "101", "CS undergrad, interested in systems."},
+		{"sample.user2@iitgn.ac.in", "Arjun Mehta", "9876543211", "Electrical Engineering", 3, "Jurqia", "205", ""},
+		{"sample.user3@iitgn.ac.in", "Sneha Iyer", "9876543212", "Mechanical Engineering", 1, "Hiqom", "312", "First year — looking for textbooks."},
+		{"sample.user4@iitgn.ac.in", "Rahul Verma", "9876543213", "Chemical Engineering", 4, "Emiet", "408", ""},
+		{"sample.user5@iitgn.ac.in", "Ananya Patel", "9876543214", "Materials Science", 2, "Duven", "118", "Lab gear and notes sometimes."},
 	}
 
 	created := 0
