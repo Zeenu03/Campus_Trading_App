@@ -7,7 +7,7 @@ A database-backed campus marketplace for students to buy, sell, and trade items 
 | Folder | Description |
 |--------|-------------|
 | **[Assignment_1](./Assignment_1/)** | Database design and implementation: schema, sample data, UML diagrams, and documentation. |
-| **[Assignment_2](./Assignment_2/)** | Full-stack application: Go backend with MySQL, React frontend, admin audit log, and member seeding. |
+| **[Assignment_2](./Assignment_2/)** | Full-stack application: Go backend with MySQL, React frontend, admin audit log, and member seeding and B+ Tree implementation for efficient product search. |
 
 ## Quick start
 
@@ -25,4 +25,4 @@ A database-backed campus marketplace for students to buy, sell, and trade items 
 
 ## License
 
-Course work — use according to your institution's policies.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
