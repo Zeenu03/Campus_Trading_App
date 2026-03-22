@@ -228,7 +228,7 @@ ORDER BY TABLE_NAME;
 | Q8 — Audit log by timestamp  | `GET /admin/audit-log`        | 1.379           | 1.600          | −16.0%     |
 | **Combined**                 |                               | **3.648 ms**    | **3.358 ms**   | **+7.9%**  |
 
-> Full EXPLAIN plan analysis and charts: [`report/README.md`](Assignment2Final/report/README.md)  
+> Full EXPLAIN plan analysis and charts: [`report/README.md`](Assignment2Final/report/IndexOptimizationReport.md)  
 > Full assignment report (all 5 subtasks): [`report/ASSIGNMENT_REPORT.md`](Assignment2Final/report/ASSIGNMENT_REPORT.md)
 
 ---
