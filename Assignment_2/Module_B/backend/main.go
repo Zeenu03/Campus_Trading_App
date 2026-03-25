@@ -19,7 +19,10 @@ import (
 
 func main() {
 	// Load .env if present
-	_ = godotenv.Load()
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 
 	// Init DB
 	appdb.Init()
@@ -29,16 +32,18 @@ func main() {
 	if auditPath == "" {
 		auditPath = "./logs/audit.log"
 	}
+
+	// Create audit log file if it doesn't exist
 	appaudit.Init(auditPath)
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		log.Fatalf("PORT is not set in the environment variables")
 	}
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
-		frontendURL = "http://localhost:5173"
+		log.Fatalf("FRONTEND_URL is not set in the environment variables")
 	}
 
 	r := chi.NewRouter()
