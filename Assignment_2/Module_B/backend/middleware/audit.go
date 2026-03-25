@@ -57,6 +57,9 @@ func AuditMiddleware(next http.Handler) http.Handler {
 		statusCode := ww.statusCode()
 
 		action := r.Method
+		if action == "GET" {
+			return
+		}
 		targetTable := routeToTable(r.URL.Path)
 		targetID := extractID(r.URL.Path)
 		ipAddress := realIP(r)
@@ -81,12 +84,13 @@ func AuditMiddleware(next http.Handler) http.Handler {
 
 		_, _ = appdb.DB.Exec(
 			`INSERT INTO audit_log (session_id, user_id, action, target_table, target_id, ip_address, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			sidVal, uidVal, action, targetTable, tidVal, ipAddress, auditStatus,
 		)
 
 		// Write to audit.log file
 		appaudit.Append(sessionID, action, targetTable, targetID, ipAddress, auditStatus, userID)
+
 	})
 }
 
