@@ -10,8 +10,8 @@ CREATE DATABASE IF NOT EXISTS CampusTradingB CHARACTER SET utf8mb4 COLLATE utf8m
 
 USE CampusTradingB;
 
--- Use IST (Indian Standard Time = UTC+05:30) for all session-level timestamps
-SET time_zone = '+05:30';
+-- Session timezone for this script: UTC for defaults/triggers evaluated during init
+SET time_zone = '+00:00';
 
 -- Drop triggers before tables
 DROP TRIGGER IF EXISTS trg_message_ai;

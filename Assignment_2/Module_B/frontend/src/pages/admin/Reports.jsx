@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import Pagination from '../../components/Pagination';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import toast from 'react-hot-toast';
+import { formatDateUTC } from '../../utils/datetime';
 
 export default function AdminReports() {
   const [reports, setReports]   = useState([]);
@@ -86,7 +87,7 @@ export default function AdminReports() {
                     Reported by: {r.reporter_name} •{' '}
                     {r.reported_member_id && `Member #${r.reported_member_id}`}
                     {r.reported_listing_id && `Listing #${r.reported_listing_id}`}
-                    {' '}• {new Date(r.submitted_date).toLocaleDateString()}
+                    {' '}• {formatDateUTC(r.submitted_date)}
                   </p>
                 </div>
                 {(r.status === 'Submitted' || r.status === 'UnderReview') && (

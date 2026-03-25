@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import toast from 'react-hot-toast';
+import { formatDateUTC } from '../utils/datetime';
 
 const TABS = ['listings', 'transactions', 'ratings', 'wish_requests', 'watchlist'];
 const TAB_LABELS = { listings: 'Listings', transactions: 'Transactions', ratings: 'Ratings',
@@ -174,7 +175,7 @@ export default function Portfolio() {
                       ? <><span className="font-medium">{role}</span> • ₹{Number(tx.agreed_price).toLocaleString()} • </>
                       : <>Offered ₹{Number(tx.agreed_price).toLocaleString()} • </>
                     }
-                    with {other} • {new Date(tx.created_date).toLocaleDateString()}
+                    with {other} • {formatDateUTC(tx.created_date)}
                   </p>
                   {tx.reason && <p className="text-xs text-gray-400 mt-0.5 italic">"{tx.reason}"</p>}
                 </div>
@@ -251,7 +252,7 @@ export default function Portfolio() {
               <div key={r.rating_id} className="card">
                 <StarRating stars={r.stars} />
                 {r.review_text && <p className="text-sm text-gray-700 mt-1">{r.review_text}</p>}
-                <p className="text-xs text-gray-400 mt-2">{new Date(r.rating_date).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400 mt-2">{formatDateUTC(r.rating_date)}</p>
               </div>
             ))}
             {ratings.length === 0 && <p className="text-gray-400 text-center py-8">No ratings yet.</p>}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import Pagination from '../../components/Pagination';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { formatDateTimeUTC } from '../../utils/datetime';
 
 // A row written by the HTTP middleware always has an ip_address.
 // A row written by a MySQL trigger never sets ip_address (NULL).
@@ -160,11 +161,7 @@ export default function AdminAudit() {
 
                     {/* Timestamp */}
                     <td className="px-3 py-2 whitespace-nowrap text-gray-600 tabular-nums">
-                      {new Date(entry.timestamp).toLocaleString('en-IN', {
-                        year: 'numeric', month: '2-digit', day: '2-digit',
-                        hour: '2-digit', minute: '2-digit', second: '2-digit',
-                        fractionalSecondDigits: 3,
-                      })}
+                      {formatDateTimeUTC(entry.timestamp)}
                     </td>
 
                     {/* Source badge */}

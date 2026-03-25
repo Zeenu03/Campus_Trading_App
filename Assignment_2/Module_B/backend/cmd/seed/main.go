@@ -30,7 +30,7 @@ func main() {
 		user := getEnv("DB_USER", "root")
 		pass := getEnv("DB_PASSWORD", "")
 		name := getEnv("DB_NAME", "CampusTradingB")
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Asia%%2FKolkata",
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=UTC&time_zone=UTC",
 			user, pass, "127.0.0.1", port, name)
 	}
 

@@ -8,6 +8,7 @@ import ListingImage from '../components/ListingImage';
 import ListingForm, { validateListingForm, buildListingPayload, listingToFormState } from '../components/ListingForm';
 import ChatPanel from '../components/ChatPanel';
 import { normalizeListingPayload, isListingDetailShape } from '../utils/listingApi';
+import { formatDateUTC } from '../utils/datetime';
 import toast from 'react-hot-toast';
 
 const fmtPrice = (p) =>
@@ -470,7 +471,7 @@ export default function ListingDetail() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Category:</span> <span className="font-medium">{listing.category_name}</span></div>
               <div><span className="text-gray-500">Condition:</span> <span className="font-medium">{listing.condition || 'N/A'}</span></div>
-              <div><span className="text-gray-500">Listed:</span> <span className="font-medium">{new Date(listing.created_date).toLocaleDateString()}</span></div>
+              <div><span className="text-gray-500">Listed:</span> <span className="font-medium">{formatDateUTC(listing.created_date)}</span></div>
               <div>
                 <span className="text-gray-500">Interested:</span>{' '}
                 <span className="font-medium">{listing.watcher_count} {listing.watcher_count === 1 ? 'person' : 'people'}</span>
