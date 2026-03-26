@@ -86,13 +86,6 @@ func SessionGuard(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, CtxSessionID, sessionID)
 		ctx = context.WithValue(ctx, CtxMemberID, memberID)
 
-		// Write identity back into the mutable auditCtx injected by AuditMiddleware
-		// so it can log the correct session and user after the handler chain returns.
-		if ac, ok := r.Context().Value(auditCtxKey{}).(*auditCtx); ok {
-			ac.SessionID = sessionID
-			ac.UserID = userID
-		}
-
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -156,4 +149,9 @@ func respondUnauthorized(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":"` + msg + `"}`))
+}
+
+func SetSessionVars(tx *sql.Tx, sessionID string, userID int) error {
+	_, err := tx.Exec("SET @session_id = ?, @current_user_id = ?", sessionID, userID)
+	return err
 }

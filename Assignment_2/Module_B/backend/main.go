@@ -47,7 +47,6 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware(frontendURL))
-	r.Use(mw.AuditMiddleware)
 
 	// Serve uploaded images (before /api to avoid conflict)
 	workDir, _ := os.Getwd()
