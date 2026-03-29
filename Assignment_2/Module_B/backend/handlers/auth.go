@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -17,11 +18,6 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
-
-var allowedRegisterHostels = map[string]struct{}{
-	"Aaiban": {}, "Buqni": {}, "Chimar": {}, "Duven": {}, "Emiet": {}, "Ijoka": {},
-	"Jurqia": {}, "Kyzeal": {}, "Lakhag": {}, "Firpel": {}, "Hiqom": {},
-}
 
 func normalizeOptionalPtr(ptr *string) *string {
 	if ptr == nil {
@@ -52,7 +48,7 @@ func validateRegisterHostelRoom(hostel *string, room *string) string {
 	if r == "" {
 		return "room_number is required when hostel is provided"
 	}
-	if _, ok := allowedRegisterHostels[h]; !ok {
+	if !slices.Contains(HOSTELS, h) {
 		return "invalid hostel name"
 	}
 	n, err := strconv.Atoi(r)

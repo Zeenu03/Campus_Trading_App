@@ -59,6 +59,10 @@ func main() {
 	// ── Public routes ──────────────────────────────────────────
 	r.Route("/api/v1", func(r chi.Router) {
 
+		r.Route("/common", func(r chi.Router) {
+			r.Get("/departments", handlers.ListDepartments)
+			r.Get("/hostels", handlers.ListHostels)
+		})
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/login", handlers.Login)
 			r.Post("/register", handlers.Register)

@@ -15,7 +15,7 @@ export default function Login() {
     if (!authLoading && user) navigate('/dashboard', { replace: true });
   }, [authLoading, user, navigate]);
 
-  if (authLoading) {
+  if (authLoading) { // if the user is still loading, show a loading spinner
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="spinner" />

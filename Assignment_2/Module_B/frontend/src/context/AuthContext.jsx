@@ -14,9 +14,9 @@ export function AuthProvider({ children }) {
     } catch {
       setUser(null);
     } finally {
-      setLoading(false);
+      setLoading(false);  // set loading to false after the user is loaded
     }
-  }, []);
+  }, []); // empty dependency array means loadUser will only run once when the component mounts
 
   useEffect(() => { loadUser(); }, [loadUser]);
 
