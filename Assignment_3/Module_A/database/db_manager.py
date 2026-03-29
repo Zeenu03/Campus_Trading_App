@@ -8,6 +8,7 @@ and B+ Tree implementations.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
 from .table import Table
@@ -41,6 +42,317 @@ class DatabaseManager:
     @staticmethod
     def _resource_id(db_name: str, table_name: str, key: Any) -> str:
         return f"{db_name}:{table_name}:{key}"
+
+    @staticmethod
+    def _iso_now() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _init_record_for_schema(table: Table) -> Dict[str, Any]:
+        """Build a full record with None defaults for all schema columns."""
+        return {column: None for column in table.schema.keys()}
+
+    @staticmethod
+    def _next_numeric_key(table: Table, key_name: str) -> int:
+        """Return next integer key value based on current table contents."""
+        max_key = 0
+        for key, _ in table.get_all():
+            if isinstance(key, int) and key > max_key:
+                max_key = key
+        return max_key + 1
+
+    def _build_transaction_record(
+        self,
+        tx_table: Table,
+        tx_id: int,
+        listing_id: int,
+        seller_id: int,
+        buyer_id: int,
+        offer_id: int,
+        agreed_price: float,
+    ) -> Dict[str, Any]:
+        record = self._init_record_for_schema(tx_table)
+
+        if "TransactionID" in record:
+            record["TransactionID"] = tx_id
+        if "ListingID" in record:
+            record["ListingID"] = listing_id
+        if "SellerID" in record:
+            record["SellerID"] = seller_id
+        if "BuyerID" in record:
+            record["BuyerID"] = buyer_id
+        if "OfferID" in record:
+            record["OfferID"] = offer_id
+        if "AgreedPrice" in record:
+            record["AgreedPrice"] = float(agreed_price)
+        if "Status" in record:
+            record["Status"] = "Scheduled"
+        if "CreatedDate" in record and tx_table.schema.get("CreatedDate") is str:
+            record["CreatedDate"] = self._iso_now()
+
+        return record
+
+    def _build_notification_record(
+        self,
+        notification_table: Table,
+        notification_id: int,
+        recipient_id: int,
+        notification_type: str,
+        message: str,
+        listing_id: int,
+        offer_id: int,
+        transaction_id: int,
+    ) -> Dict[str, Any]:
+        record = self._init_record_for_schema(notification_table)
+
+        if "NotificationID" in record:
+            record["NotificationID"] = notification_id
+        if "RecipientID" in record:
+            record["RecipientID"] = recipient_id
+        if "NotificationType" in record:
+            record["NotificationType"] = notification_type
+        if "Title" in record:
+            record["Title"] = notification_type
+        if "Message" in record:
+            record["Message"] = message
+        if "RelatedListingID" in record:
+            record["RelatedListingID"] = listing_id
+        if "RelatedOfferID" in record:
+            record["RelatedOfferID"] = offer_id
+        if "RelatedTransactionID" in record:
+            record["RelatedTransactionID"] = transaction_id
+        if "CreatedDate" in record and notification_table.schema.get("CreatedDate") is str:
+            record["CreatedDate"] = self._iso_now()
+
+        return record
+
+    def accept_offer_atomic(
+        self,
+        db_name: str,
+        offer_id: int,
+        acting_seller_id: int,
+        agreed_price: float | None = None,
+        include_notifications: bool = True,
+        create_declined_transactions: bool = True,
+        fail_after_step: int | None = None,
+    ) -> Tuple[bool, str]:
+        """Phase 2 service: accept an offer with multi-table atomic side effects.
+
+        Steps:
+        1) Accept chosen offer.
+        2) Decline competing submitted offers on the same listing.
+        3) Mark listing as sold.
+        4) Insert transaction row(s).
+        5) Insert notification row(s) (optional).
+        """
+
+        def maybe_fail(step_no: int) -> None:
+            if fail_after_step is not None and fail_after_step == step_no:
+                raise RuntimeError(f"Injected failure after step {step_no}")
+
+        tx_id = self.begin_transaction()
+
+        try:
+            offer_table, msg = self.get_table(db_name, "Offer")
+            if offer_table is None:
+                raise RuntimeError(msg)
+
+            listing_table, msg = self.get_table(db_name, "Listing")
+            if listing_table is None:
+                raise RuntimeError(msg)
+
+            transaction_table, msg = self.get_table(db_name, "Transaction")
+            if transaction_table is None:
+                raise RuntimeError(msg)
+
+            notification_table: Table | None = None
+            if include_notifications:
+                notification_table, _ = self.get_table(db_name, "Notification")
+
+            target_offer, msg = self.tx_get(tx_id, db_name, "Offer", offer_id)
+            if target_offer is None:
+                raise RuntimeError(msg if msg != "OK" else f"Offer '{offer_id}' not found")
+
+            if target_offer.get("OfferStatus") != "Submitted":
+                raise RuntimeError("Offer is no longer active")
+
+            listing_id = target_offer.get("ListingID")
+            buyer_id = target_offer.get("BuyerID")
+            offered_price = target_offer.get("OfferedPrice")
+
+            if not isinstance(listing_id, int):
+                raise RuntimeError("Offer record missing valid ListingID")
+            if not isinstance(buyer_id, int):
+                raise RuntimeError("Offer record missing valid BuyerID")
+
+            listing_lock = self._resource_id(db_name, "Listing", listing_id)
+            if not self.tx_manager.lock_manager.acquire(tx_id, listing_lock, timeout=1.0):
+                raise RuntimeError(f"Could not acquire lock for {listing_lock}")
+
+            listing_row, msg = self.tx_get(tx_id, db_name, "Listing", listing_id)
+            if listing_row is None:
+                raise RuntimeError(msg if msg != "OK" else f"Listing '{listing_id}' not found")
+
+            seller_id = listing_row.get("SellerID")
+            status = listing_row.get("Status")
+
+            if seller_id != acting_seller_id:
+                raise RuntimeError("Only the listing owner can accept this offer")
+            if status not in {"Listed", "Pending"}:
+                raise RuntimeError("Listing is not available for offer acceptance")
+            if buyer_id == acting_seller_id:
+                raise RuntimeError("Buyer and seller cannot be the same member")
+
+            agreed = float(agreed_price if agreed_price is not None else offered_price)
+            if agreed <= 0:
+                raise RuntimeError("Agreed price must be > 0")
+
+            accepted_offer = dict(target_offer)
+            accepted_offer["OfferStatus"] = "Accepted"
+            if "AgreedPrice" in accepted_offer:
+                accepted_offer["AgreedPrice"] = agreed
+            if "ResponseDate" in accepted_offer and offer_table.schema.get("ResponseDate") is str:
+                accepted_offer["ResponseDate"] = self._iso_now()
+
+            ok, msg = self.tx_update(tx_id, db_name, "Offer", offer_id, accepted_offer)
+            if not ok:
+                raise RuntimeError(msg)
+            maybe_fail(1)
+
+            competing: List[Tuple[int, Dict[str, Any]]] = []
+            for key, row in offer_table.get_all():
+                if (
+                    row.get("ListingID") == listing_id
+                    and row.get("OfferStatus") == "Submitted"
+                    and key != offer_id
+                ):
+                    competing.append((int(key), dict(row)))
+
+            for other_offer_id, other_row in competing:
+                declined_row = dict(other_row)
+                declined_row["OfferStatus"] = "Declined"
+                if "Reason" in declined_row:
+                    declined_row["Reason"] = "Sold to another buyer"
+                if "ResponseDate" in declined_row and offer_table.schema.get("ResponseDate") is str:
+                    declined_row["ResponseDate"] = self._iso_now()
+
+                ok, msg = self.tx_update(tx_id, db_name, "Offer", other_offer_id, declined_row)
+                if not ok:
+                    raise RuntimeError(msg)
+            maybe_fail(2)
+
+            updated_listing = dict(listing_row)
+            updated_listing["Status"] = "Sold"
+            if "LastModifiedDate" in updated_listing and listing_table.schema.get("LastModifiedDate") is str:
+                updated_listing["LastModifiedDate"] = self._iso_now()
+
+            ok, msg = self.tx_update(tx_id, db_name, "Listing", listing_id, updated_listing)
+            if not ok:
+                raise RuntimeError(msg)
+            maybe_fail(3)
+
+            accepted_txn_id = self._next_numeric_key(transaction_table, transaction_table.search_key)
+            accepted_txn_record = self._build_transaction_record(
+                transaction_table,
+                accepted_txn_id,
+                listing_id,
+                acting_seller_id,
+                buyer_id,
+                offer_id,
+                agreed,
+            )
+            ok, msg = self.tx_insert(tx_id, db_name, "Transaction", accepted_txn_record)
+            if not ok:
+                raise RuntimeError(msg)
+
+            declined_txns: List[Tuple[int, int]] = []
+            if create_declined_transactions:
+                for other_offer_id, other_row in competing:
+                    other_buyer_id = other_row.get("BuyerID")
+                    other_price = float(other_row.get("OfferedPrice", 0.0))
+                    if not isinstance(other_buyer_id, int):
+                        continue
+
+                    next_txn_id = self._next_numeric_key(transaction_table, transaction_table.search_key)
+                    other_txn = self._build_transaction_record(
+                        transaction_table,
+                        next_txn_id,
+                        listing_id,
+                        acting_seller_id,
+                        other_buyer_id,
+                        other_offer_id,
+                        other_price,
+                    )
+                    ok, msg = self.tx_insert(tx_id, db_name, "Transaction", other_txn)
+                    if not ok:
+                        raise RuntimeError(msg)
+                    declined_txns.append((other_offer_id, next_txn_id))
+            maybe_fail(4)
+
+            if include_notifications and notification_table is not None:
+                winner_note_id = self._next_numeric_key(notification_table, notification_table.search_key)
+                winner_note = self._build_notification_record(
+                    notification_table,
+                    winner_note_id,
+                    buyer_id,
+                    "OfferAccepted",
+                    "Your offer has been accepted.",
+                    listing_id,
+                    offer_id,
+                    accepted_txn_id,
+                )
+                ok, msg = self.tx_insert(tx_id, db_name, "Notification", winner_note)
+                if not ok:
+                    raise RuntimeError(msg)
+
+                seller_note_id = self._next_numeric_key(notification_table, notification_table.search_key)
+                seller_note = self._build_notification_record(
+                    notification_table,
+                    seller_note_id,
+                    acting_seller_id,
+                    "TransactionCompleted",
+                    "Offer accepted and transaction created.",
+                    listing_id,
+                    offer_id,
+                    accepted_txn_id,
+                )
+                ok, msg = self.tx_insert(tx_id, db_name, "Notification", seller_note)
+                if not ok:
+                    raise RuntimeError(msg)
+
+                for other_offer_id, decline_txn_id in declined_txns:
+                    other_offer = offer_table.get(other_offer_id)
+                    if other_offer is None:
+                        continue
+                    other_buyer = other_offer.get("BuyerID")
+                    if not isinstance(other_buyer, int):
+                        continue
+
+                    note_id = self._next_numeric_key(notification_table, notification_table.search_key)
+                    lose_note = self._build_notification_record(
+                        notification_table,
+                        note_id,
+                        other_buyer,
+                        "OfferDeclined",
+                        "Another buyer's offer was accepted on this listing.",
+                        listing_id,
+                        other_offer_id,
+                        decline_txn_id,
+                    )
+                    ok, msg = self.tx_insert(tx_id, db_name, "Notification", lose_note)
+                    if not ok:
+                        raise RuntimeError(msg)
+            maybe_fail(5)
+
+            ok, msg = self.commit_transaction(tx_id)
+            if not ok:
+                raise RuntimeError(msg)
+
+            return True, f"Offer '{offer_id}' accepted atomically"
+
+        except Exception as exc:
+            self.rollback_transaction(tx_id)
+            return False, str(exc)
 
     def begin_transaction(self) -> str:
         """Start a transaction and return its id."""

@@ -17,8 +17,9 @@ from typing import Any, Dict, List
 class WriteAheadLog:
     """Append-only JSONL WAL writer/reader."""
 
-    def __init__(self, log_path: str):
+    def __init__(self, log_path: str, sync_on_commit: bool = True):
         self.log_path = log_path
+        self.sync_on_commit = sync_on_commit
         self._lock = threading.Lock()
         self._lsn = 0
         self._bootstrap_lsn()
@@ -37,8 +38,11 @@ class WriteAheadLog:
     def _now_iso() -> str:
         return datetime.now(timezone.utc).isoformat()
 
-    def append(self, record: Dict[str, Any]) -> Dict[str, Any]:
-        """Append one record to WAL and return the final stored object."""
+    def append(self, record: Dict[str, Any], durable: bool = False) -> Dict[str, Any]:
+        """Append one record to WAL and return the final stored object.
+
+        When durable=True, force the write to stable storage via fsync.
+        """
         os.makedirs(os.path.dirname(self.log_path) or ".", exist_ok=True)
 
         with self._lock:
@@ -49,6 +53,8 @@ class WriteAheadLog:
             with open(self.log_path, "a", encoding="utf-8") as fp:
                 fp.write(json.dumps(payload, ensure_ascii=True) + "\n")
                 fp.flush()
+                if durable:
+                    os.fsync(fp.fileno())
 
             return payload
 
@@ -76,7 +82,10 @@ class WriteAheadLog:
         )
 
     def log_commit(self, tx_id: str) -> Dict[str, Any]:
-        return self.append({"tx_id": tx_id, "type": "COMMIT"})
+        return self.append(
+            {"tx_id": tx_id, "type": "COMMIT"},
+            durable=self.sync_on_commit,
+        )
 
     def log_rollback(self, tx_id: str) -> Dict[str, Any]:
         return self.append({"tx_id": tx_id, "type": "ROLLBACK"})
