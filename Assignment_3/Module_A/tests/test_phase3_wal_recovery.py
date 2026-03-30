@@ -9,6 +9,9 @@ from database import DatabaseManager, RecoveryManager
 
 
 class TestPhase3WalRecovery(unittest.TestCase):
+    def _log_case(self, title: str) -> None:
+        print(f"\n[Phase 3] {title}")
+
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.wal_path = f"{self.tmpdir.name}/wal.log"
@@ -31,6 +34,7 @@ class TestPhase3WalRecovery(unittest.TestCase):
         self.tmpdir.cleanup()
 
     def test_wal_contains_begin_change_commit_and_monotonic_lsn(self) -> None:
+        self._log_case("WAL sequence and monotonic LSN")
         tx = self.dbm.begin_transaction()
         ok, msg = self.dbm.tx_insert(
             tx,
@@ -59,6 +63,7 @@ class TestPhase3WalRecovery(unittest.TestCase):
         self.assertEqual(len(set(lsns)), len(lsns))
 
     def test_recovery_analysis_separates_committed_and_rolled_back(self) -> None:
+        self._log_case("Recovery analysis: committed vs rolled-back classification")
         tx_commit = self.dbm.begin_transaction()
         ok, msg = self.dbm.tx_insert(
             tx_commit,

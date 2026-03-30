@@ -9,6 +9,9 @@ from database import DatabaseManager
 
 
 class TestPhase1Transactions(unittest.TestCase):
+    def _log_case(self, title: str) -> None:
+        print(f"\n[Phase 1] {title}")
+
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         wal_path = f"{self.tmpdir.name}/wal.log"
@@ -36,6 +39,7 @@ class TestPhase1Transactions(unittest.TestCase):
         self.tmpdir.cleanup()
 
     def test_insert_commit_persists(self) -> None:
+        self._log_case("Insert + Commit -> row persists")
         tx = self.dbm.begin_transaction()
 
         ok, msg = self.dbm.tx_insert(
@@ -60,6 +64,7 @@ class TestPhase1Transactions(unittest.TestCase):
         self.assertIsNotNone(table.get(1))
 
     def test_insert_rollback_undoes_change(self) -> None:
+        self._log_case("Insert + Rollback -> row removed")
         tx = self.dbm.begin_transaction()
 
         ok, msg = self.dbm.tx_insert(
@@ -84,6 +89,7 @@ class TestPhase1Transactions(unittest.TestCase):
         self.assertIsNone(table.get(2))
 
     def test_update_rollback_restores_before_image(self) -> None:
+        self._log_case("Update + Rollback -> before-image restored")
         table, _ = self.dbm.get_table("campus", "Offer")
         self.assertIsNotNone(table)
 

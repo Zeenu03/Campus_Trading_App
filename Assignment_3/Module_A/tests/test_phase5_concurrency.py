@@ -10,6 +10,9 @@ from database import DatabaseManager
 
 
 class TestPhase5Concurrency(unittest.TestCase):
+    def _log_case(self, title: str) -> None:
+        print(f"\n[Phase 5] {title}")
+
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         wal_path = f"{self.tmpdir.name}/wal.log"
@@ -93,6 +96,7 @@ class TestPhase5Concurrency(unittest.TestCase):
             self.assertTrue(ok, msg)
 
     def test_competing_accepts_same_listing_single_winner(self) -> None:
+        self._log_case("Isolation: competing offers on one listing -> single winner")
         self._seed_listing_and_offers()
 
         start_barrier = threading.Barrier(2)
@@ -140,6 +144,7 @@ class TestPhase5Concurrency(unittest.TestCase):
         self.assertEqual(len(transaction_table.get_all()), 2)
 
     def test_many_threads_same_offer_only_one_commit(self) -> None:
+        self._log_case("Isolation: many threads same offer -> one commit")
         self._seed_listing_and_offers()
 
         thread_count = 10

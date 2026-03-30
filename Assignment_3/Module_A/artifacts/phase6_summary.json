@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-29T13:03:44.344639+00:00",
+  "generated_at_utc": "2026-03-29T13:30:11.012823+00:00",
   "tests": {
     "command": "D:\\Courses\\Databases\\Project\\.venv\\Scripts\\python.exe -m unittest tests/test_phase1_transactions.py tests/test_phase2_accept_offer.py tests/test_phase3_wal_recovery.py tests/test_phase4_recovery_replay.py tests/test_phase5_concurrency.py",
     "exit_code": 0,
@@ -28,19 +28,21 @@
       }
     },
     "recovery_undo": {
-      "tx_id": "T-31b515102e45",
+      "tx_id": "T-2c60fe2f83ec",
       "pre_recover_present": true,
       "post_recover_present": false,
       "recovery": {
         "status": "ok",
-        "total_records": 2,
+        "total_records": 6,
         "redo_transactions": [],
         "undo_transactions": [
-          "T-31b515102e45"
+          "T-2c60fe2f83ec",
+          "T-31b515102e45",
+          "T-4e5db239e8b5"
         ],
         "rolled_back_transactions": [],
         "applied_redo": 0,
-        "applied_undo": 1,
+        "applied_undo": 3,
         "note": "REDO/UNDO replay applied."
       },
       "invariants": {
@@ -49,18 +51,20 @@
       }
     },
     "recovery_redo": {
-      "tx_id": "T-dda0b6618167",
+      "tx_id": "T-dc69670d079d",
       "pre_recover_present": false,
       "post_recover_present": true,
       "recovery": {
         "status": "ok",
-        "total_records": 3,
+        "total_records": 9,
         "redo_transactions": [
+          "T-ae3b20918c1b",
+          "T-dc69670d079d",
           "T-dda0b6618167"
         ],
         "undo_transactions": [],
         "rolled_back_transactions": [],
-        "applied_redo": 1,
+        "applied_redo": 3,
         "applied_undo": 0,
         "note": "REDO/UNDO replay applied."
       },

@@ -6,7 +6,7 @@ This module implements a B+ Tree data structure for efficient database indexing,
 
 ## Project Structure
 
-```
+```text
 Module_A/
 ├── database/
 │   ├── __init__.py      # Package initialization
@@ -34,17 +34,20 @@ pip install -r requirements.txt
 ### 2. Install Graphviz (for tree visualization)
 
 **Windows:**
+
 ```bash
 choco install graphviz
 # OR download from https://graphviz.org/download/
 ```
 
 **macOS:**
+
 ```bash
 brew install graphviz
 ```
 
 **Linux:**
+
 ```bash
 sudo apt-get install graphviz
 ```
@@ -102,9 +105,32 @@ analyzer.print_summary()
 jupyter notebook report.ipynb
 ```
 
+## Assignment 3 Workflow
+
+This Module A folder now includes Assignment 3 transaction and recovery work.
+
+### Run All Tests (Phases 1-5)
+
+```bash
+python -m unittest tests/test_phase1_transactions.py tests/test_phase2_accept_offer.py tests/test_phase3_wal_recovery.py tests/test_phase4_recovery_replay.py tests/test_phase5_concurrency.py
+```
+
+### Generate Phase 6 Report Artifacts
+
+```bash
+python scripts/generate_phase6_artifacts.py
+```
+
+Generated files:
+
+- `artifacts/phase6_summary.json`
+- `artifacts/phase6_summary.md`
+- `artifacts/unittest_output.txt`
+
 ## Authors
 
 Team 8 - CS432 Databases
+
 - Bhavik Patel
 - Hitesh Kumar
 - Jinil Patel
