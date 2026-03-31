@@ -27,7 +27,7 @@ class DatabaseManager:
             wal_path = os.path.join(module_a_root, "data", "wal.log")
 
         self.wal = WriteAheadLog(wal_path)
-        self.tx_manager = TransactionManager(self.wal)
+        self.tx_manager = TransactionManager(self.wal, undo_change=self._undo_change)
 
     @staticmethod
     def _qualified_table_name(db_name: str, table_name: str) -> str:
@@ -370,20 +370,13 @@ class DatabaseManager:
         """Rollback an active transaction and undo its applied changes."""
         try:
             tx_ctx = self.tx_manager.get(tx_id)
-        except KeyError as exc:
+            if tx_ctx.state != TransactionState.ACTIVE:
+                return False, f"Transaction '{tx_id}' is not active"
+
+            self.tx_manager.rollback(tx_id, apply_undo=True)
+            return True, f"Transaction '{tx_id}' rolled back"
+        except (KeyError, RuntimeError) as exc:
             return False, str(exc)
-
-        if tx_ctx.state != TransactionState.ACTIVE:
-            return False, f"Transaction '{tx_id}' is not active"
-
-        # Undo in reverse order to preserve atomicity semantics.
-        try:
-            for change in reversed(tx_ctx.changes):
-                self._undo_change(change)
-        finally:
-            self.tx_manager.rollback(tx_id)
-
-        return True, f"Transaction '{tx_id}' rolled back"
 
     def get_transaction_state(self, tx_id: str) -> Tuple[TransactionState | None, str]:
         """Return transaction state for diagnostics."""
