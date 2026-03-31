@@ -24,9 +24,9 @@ class LockManager:
 
     def __init__(self):
         self._global = threading.RLock()
-        self._locks: Dict[str, threading.Lock] = {}
-        self._owners: Dict[str, str] = {}
-        self._tx_resources: Dict[str, TxLockSet] = defaultdict(TxLockSet)
+        self._locks: Dict[str, threading.Lock] = {}     # resource_id -> lock
+        self._owners: Dict[str, str] = {}                # resource_id -> tx_id
+        self._tx_resources: Dict[str, TxLockSet] = defaultdict(TxLockSet) # tx_id -> TxLockSet
 
     def _resource_lock(self, resource_id: str) -> threading.Lock:
         with self._global:

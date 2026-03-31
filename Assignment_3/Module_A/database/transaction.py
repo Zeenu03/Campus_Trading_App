@@ -46,7 +46,7 @@ class TransactionManager:
         self.wal = wal
         self.lock_manager = lock_manager or LockManager()
         self._lock = threading.RLock()
-        self._transactions: Dict[str, TransactionContext] = {}
+        self._transactions: Dict[str, TransactionContext] = {} # tx_id -> TransactionContext
 
     def begin(self) -> str:
         """Start a transaction and return its id."""

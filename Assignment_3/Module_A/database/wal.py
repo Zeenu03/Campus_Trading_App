@@ -21,7 +21,7 @@ class WriteAheadLog:
         self.log_path = log_path
         self.sync_on_commit = sync_on_commit
         self._lock = threading.Lock()
-        self._lsn = 0
+        self._lsn = 0       # LSN(log sequence number) counter for sequence numbers
         self._bootstrap_lsn()
 
     def _bootstrap_lsn(self) -> None:

@@ -82,6 +82,7 @@ class RecoveryManager:
 
     @staticmethod
     def _change_entries_for_tx(entries: List[Dict[str, Any]], tx_id: str) -> List[Dict[str, Any]]:
+        # Filter entries for the given tx_id and return only INSERT, UPDATE, DELETE entries
         out: List[Dict[str, Any]] = []
         for entry in entries:
             if entry.get("tx_id") != tx_id:
