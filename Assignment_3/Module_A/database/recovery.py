@@ -133,7 +133,7 @@ class RecoveryManager:
             new_key = after.get(key_field, old_key)
 
             if old_key != new_key and table.get(old_key) is not None:
-                table.delete(old_key)
+                table.delete(old_key) 
 
             RecoveryManager._apply_row_image(table, key_field, new_key, after)
             return 1
@@ -198,17 +198,28 @@ class RecoveryManager:
         applied_redo = 0
         applied_undo = 0
 
-        # REDO committed transactions in log order.
-        for tx_id in summary.committed_transactions:
-            tx_entries = self._change_entries_for_tx(entries, tx_id)
-            for entry in tx_entries:
-                applied_redo += self._redo_change(db_manager, entry)
+        committed_set = set(summary.committed_transactions)
+        uncommitted_set = set(summary.uncommitted_transactions)
+        change_types = {"INSERT", "UPDATE", "DELETE"}
 
-        # UNDO crash-uncommitted transactions in reverse log order.
-        for tx_id in summary.uncommitted_transactions:
-            tx_entries = self._change_entries_for_tx(entries, tx_id)
-            for entry in reversed(tx_entries):
-                applied_undo += self._undo_change(db_manager, entry)
+        # REDO: scan entire WAL in forward order and replay only committed changes.
+        # This preserves cross-transaction ordering by LSN.
+        for entry in entries:
+            tx_id = entry.get("tx_id")
+            if tx_id not in committed_set:
+                continue
+            if entry.get("type") not in change_types:
+                continue
+            applied_redo += self._redo_change(db_manager, entry)
+
+        # UNDO: scan WAL in reverse order and undo only crash-uncommitted changes.
+        for entry in reversed(entries):
+            tx_id = entry.get("tx_id")
+            if tx_id not in uncommitted_set:
+                continue
+            if entry.get("type") not in change_types:
+                continue
+            applied_undo += self._undo_change(db_manager, entry)
 
         return {
             "status": "ok",
