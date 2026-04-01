@@ -57,6 +57,9 @@ func AuditMiddleware(next http.Handler) http.Handler {
 		statusCode := ww.statusCode()
 
 		action := r.Method
+		if action == "GET" {
+			return
+		}
 		targetTable := routeToTable(r.URL.Path)
 		targetID := extractID(r.URL.Path)
 		ipAddress := realIP(r)

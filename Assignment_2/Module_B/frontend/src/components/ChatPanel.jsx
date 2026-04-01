@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { api } from '../api/client';
+import { formatUtcTimeShort } from '../utils/datetime';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -107,7 +108,7 @@ export default function ChatPanel({ threadId, currentUserId, onClose }) {
                 )}
                 <p className="whitespace-pre-wrap break-words">{msg.message_text}</p>
                 <p className={`text-xs mt-1 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                  {new Date(msg.sent_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatUtcTimeShort(msg.sent_date)}
                 </p>
               </div>
             </div>
