@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,22 +15,25 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// GET /api/v1/admin/audit-log — admin, paginated
+// GET /api/v1/admin/audit-log — admin, paginated (newest log_id first)
 // Query params:
-//   page, page_size  — pagination
-//   source           — "api" (ip_address IS NOT NULL) | "trigger" (ip_address IS NULL)
-//   status           — "success" | "fail"
-//   unauthorized     — "1"  → session_id IS NULL with write action (INSERT/UPDATE/DELETE)
+//   page, page_size — pagination
+//   source          — "api" (ip_address IS NOT NULL) | "trigger" (ip_address IS NULL)
+//   unauthorized    — "1" → session_id IS NULL with write action (INSERT/UPDATE/DELETE)
+//   ip              — substring match on ip_address (API rows only have IP)
+//   user_id         — exact match on user_id
+//   action          — exact match on action (e.g. POST, INSERT)
 func GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	page     := queryInt(r, "page", 1)
 	pageSize := queryInt(r, "page_size", 50)
 
 	q := r.URL.Query()
-	source       := q.Get("source")       // "api" | "trigger" | ""
-	statusFilter := q.Get("status")       // "success" | "fail" | ""
-	unauthorized := q.Get("unauthorized") // "1" | ""
+	source       := q.Get("source")
+	unauthorized := q.Get("unauthorized")
+	ipSub        := strings.TrimSpace(q.Get("ip"))
+	action       := strings.TrimSpace(q.Get("action"))
+	userIDStr    := strings.TrimSpace(q.Get("user_id"))
 
-	// Build WHERE clauses dynamically
 	where := " WHERE 1=1"
 	var args []interface{}
 
@@ -40,14 +44,23 @@ func GetAuditLog(w http.ResponseWriter, r *http.Request) {
 		where += " AND ip_address IS NULL"
 	}
 
-	switch statusFilter {
-	case "success", "fail":
-		where += " AND status = ?"
-		args = append(args, statusFilter)
-	}
-
 	if unauthorized == "1" {
 		where += " AND session_id IS NULL AND action IN ('INSERT','UPDATE','DELETE')"
+	}
+
+	if ipSub != "" {
+		where += " AND ip_address LIKE ?"
+		args = append(args, "%"+ipSub+"%")
+	}
+
+	if uid, err := strconv.Atoi(userIDStr); err == nil && userIDStr != "" {
+		where += " AND user_id = ?"
+		args = append(args, uid)
+	}
+
+	if action != "" {
+		where += " AND LOWER(action) = LOWER(?)"
+		args = append(args, action)
 	}
 
 	var total int
@@ -56,12 +69,10 @@ func GetAuditLog(w http.ResponseWriter, r *http.Request) {
 
 	offset, totalPages := paginate(page, pageSize, total)
 
-	// ORDER BY log_id DESC — log_id is AUTO_INCREMENT so it is strictly monotonic
-	// and breaks timestamp ties perfectly (trigger rows and middleware rows for the
-	// same request share the same DATETIME(3) value but have distinct log_ids).
+	// ORDER BY log_id DESC — newest inserts first; breaks timestamp ties vs triggers.
 	queryArgs := append(args, pageSize, offset)
 	rows, err := appdb.DB.QueryContext(r.Context(),
-		`SELECT log_id, timestamp, session_id, user_id, action, target_table, target_id, ip_address, status
+		`SELECT log_id, timestamp, session_id, user_id, action, target_table, target_id, ip_address
          FROM audit_log`+where+` ORDER BY log_id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "query failed")
@@ -73,7 +84,7 @@ func GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l models.AuditLog
 		_ = rows.Scan(&l.LogID, &l.Timestamp, &l.SessionID, &l.UserID,
-			&l.Action, &l.TargetTable, &l.TargetID, &l.IPAddress, &l.Status)
+			&l.Action, &l.TargetTable, &l.TargetID, &l.IPAddress)
 		logs = append(logs, l)
 	}
 	if logs == nil {

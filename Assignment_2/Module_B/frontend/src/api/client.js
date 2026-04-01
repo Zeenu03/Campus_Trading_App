@@ -57,7 +57,8 @@ export const api = {
     const url = params
       ? path + '?' + serializeQueryParams(params)
       : path;
-    return request(url);
+    // Avoid stale audit/admin lists when query string changes (browser HTTP cache).
+    return request(url, { cache: 'no-store' });
   },
   post:   (path, body)   => request(path, { method: 'POST',   body: JSON.stringify(body) }),
   put:    (path, body)   => request(path, { method: 'PUT',    body: JSON.stringify(body) }),

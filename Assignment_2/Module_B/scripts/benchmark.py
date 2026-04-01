@@ -384,11 +384,11 @@ def seed_data(conn, target_members=120, target_listings=600,
         ts = datetime.now() - timedelta(seconds=random.randint(0, 7776000))
         try:
             cur.execute(
-                "INSERT INTO audit_log (timestamp, session_id, user_id, action, target_table, target_id, status) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO audit_log (timestamp, session_id, user_id, action, target_table, target_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
                 (ts, rnd_str(16), random.choice(member_ids),
                  random.choice(actions), random.choice(tables),
-                 random.randint(1, 500), "success")
+                 random.randint(1, 500))
             )
         except mysql.connector.Error:
             pass

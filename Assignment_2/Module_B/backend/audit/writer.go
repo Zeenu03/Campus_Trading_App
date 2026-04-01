@@ -21,7 +21,7 @@ func Init(path string) {
 
 // Append writes one structured line to the audit log file.
 // Timestamps are UTC (RFC3339Nano).
-func Append(sessionID, action, targetTable, targetID, ipAddress, status string, userID int) {
+func Append(sessionID, action, targetTable, targetID, ipAddress string, userID int) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -41,7 +41,7 @@ func Append(sessionID, action, targetTable, targetID, ipAddress, status string, 
 		sid = "NULL"
 	}
 
-	line := fmt.Sprintf("[%s] session=%s user_id=%d action=%s table=%s id=%s ip=%s status=%s\n",
+	line := fmt.Sprintf("[%s] session=%s user_id=%d action=%s table=%s id=%s ip=%s\n",
 		time.Now().UTC().Format(time.RFC3339Nano),
 		sid,
 		userID,
@@ -49,7 +49,6 @@ func Append(sessionID, action, targetTable, targetID, ipAddress, status string, 
 		targetTable,
 		targetID,
 		ipAddress,
-		status,
 	)
 	_, _ = f.WriteString(line)
 }
