@@ -21,49 +21,25 @@ type auditCtx struct {
 
 type auditCtxKey struct{}
 
-// responseWriter wraps http.ResponseWriter to capture status code.
-type responseWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.status = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) statusCode() int {
-	if rw.status == 0 {
-		return http.StatusOK
-	}
-	return rw.status
-}
-
 // AuditMiddleware captures every API request and writes to audit_log + audit.log file.
 // It must be the outermost middleware (Use'd first) so it wraps all inner middleware.
 func AuditMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Inject a mutable auditCtx pointer so SessionGuard can write back session
-		// identity into it even though it creates a new request via r.WithContext.
 		ac := &auditCtx{}
 		r = r.WithContext(context.WithValue(r.Context(), auditCtxKey{}, ac))
 
-		ww := &responseWriter{ResponseWriter: w}
-		next.ServeHTTP(ww, r)
+		next.ServeHTTP(w, r)
 
-		// Read identity that SessionGuard populated into the shared pointer.
 		sessionID := ac.SessionID
 		userID := ac.UserID
-		statusCode := ww.statusCode()
 
 		action := r.Method
+		if action == "GET" {
+			return
+		}
 		targetTable := routeToTable(r.URL.Path)
 		targetID := extractID(r.URL.Path)
 		ipAddress := realIP(r)
-		auditStatus := "success"
-		if statusCode >= 400 {
-			auditStatus = "fail"
-		}
 
 		// Write to audit_log DB table
 		var sidVal interface{} = sessionID
@@ -80,13 +56,12 @@ func AuditMiddleware(next http.Handler) http.Handler {
 		}
 
 		_, _ = appdb.DB.Exec(
-			`INSERT INTO audit_log (session_id, user_id, action, target_table, target_id, ip_address, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			sidVal, uidVal, action, targetTable, tidVal, ipAddress, auditStatus,
+			`INSERT INTO audit_log (session_id, user_id, action, target_table, target_id, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+			sidVal, uidVal, action, targetTable, tidVal, ipAddress,
 		)
 
-		// Write to audit.log file
-		appaudit.Append(sessionID, action, targetTable, targetID, ipAddress, auditStatus, userID)
+		appaudit.Append(sessionID, action, targetTable, targetID, ipAddress, userID)
 	})
 }
 

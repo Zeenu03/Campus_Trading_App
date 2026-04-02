@@ -11,6 +11,7 @@ import WishRequestForm, {
   buildWishRequestPayload,
   wishRequestToFormState,
 } from '../components/WishRequestForm';
+import { formatUtcDate } from '../utils/datetime';
 
 const STATUS_COLORS = {
   Active: 'badge-green',
@@ -194,8 +195,8 @@ export default function WishRequestDetail() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-gray-500">Category:</span> <span className="font-medium">{wishRequest.category_name}</span></div>
                 <div><span className="text-gray-500">Condition:</span> <span className="font-medium">{wishRequest.preferred_condition || 'Any'}</span></div>
-                <div><span className="text-gray-500">Posted:</span> <span className="font-medium">{new Date(wishRequest.created_date).toLocaleDateString()}</span></div>
-                <div><span className="text-gray-500">Needed by:</span> <span className="font-medium">{wishRequest.needed_by_date ? new Date(wishRequest.needed_by_date).toLocaleDateString() : 'Not specified'}</span></div>
+                <div><span className="text-gray-500">Posted:</span> <span className="font-medium">{formatUtcDate(wishRequest.created_date)}</span></div>
+                <div><span className="text-gray-500">Needed by:</span> <span className="font-medium">{wishRequest.needed_by_date ? formatUtcDate(wishRequest.needed_by_date) : 'Not specified'}</span></div>
               </div>
 
               {wishRequest.additional_details && (

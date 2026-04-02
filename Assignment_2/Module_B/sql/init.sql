@@ -222,8 +222,7 @@ CREATE TABLE audit_log (
     action VARCHAR(20) NOT NULL,
     target_table VARCHAR(60) NOT NULL,
     target_id VARCHAR(64),
-    ip_address VARCHAR(45),
-    status ENUM('success', 'fail') NOT NULL
+    ip_address VARCHAR(45)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- ============================================================
@@ -551,8 +550,8 @@ CREATE PROCEDURE sp_audit_log(
     IN p_target_id VARCHAR(64)
 )
 BEGIN
-    INSERT INTO audit_log (session_id, user_id, action, target_table, target_id, status)
-    VALUES (@session_id, @current_user_id, p_action, p_table, p_target_id, 'success');
+    INSERT INTO audit_log (session_id, user_id, action, target_table, target_id)
+    VALUES (@session_id, @current_user_id, p_action, p_table, p_target_id);
 END //
 
 DELIMITER ;

@@ -34,7 +34,6 @@ type AuditLog struct {
 	TargetTable string    `json:"target_table"`
 	TargetID    *string   `json:"target_id"`
 	IPAddress   *string   `json:"ip_address"`
-	Status      string    `json:"status"`
 }
 
 // ── Project Tables ───────────────────────────────────────────

@@ -139,7 +139,7 @@ CREATE INDEX idx_wishrequest_requester
 -- ------------------------------------------------------------
 -- TABLE: audit_log
 -- Rationale:
---   ORDER BY timestamp DESC LIMIT ? OFFSET ?  (GET /admin/audit-log)
+--   ORDER BY timestamp DESC LIMIT ? OFFSET ?  (benchmark / ad-hoc queries; API uses log_id DESC)
 --   Without this index MySQL sorts the entire table on each page.
 -- ------------------------------------------------------------
 

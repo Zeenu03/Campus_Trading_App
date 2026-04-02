@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import toast from 'react-hot-toast';
+import { formatUtcMonthDayTime } from '../utils/datetime';
 
 const PAGE_SIZE = 50;
 
 function formatWhen(d) {
   if (!d) return '';
   try {
-    const date = new Date(d);
-    return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return formatUtcMonthDayTime(d);
   } catch {
     return '';
   }

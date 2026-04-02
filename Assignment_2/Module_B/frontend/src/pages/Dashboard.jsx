@@ -61,7 +61,7 @@ function AdminDashboard() {
           <h2 className="text-lg font-semibold mb-4">Navigation</h2>
           <div className="space-y-2 text-sm text-gray-600">
             <p>Use the navigation menu to access all admin features.</p>
-            <p>The audit log highlights direct DB writes with <span className="badge-red">red</span> session_id=NULL rows.</p>
+            <p>The audit log highlights suspicious direct DB writes (trigger path, no API session) in <span className="badge-red">red</span>.</p>
             <p>The benchmark page shows query performance before/after indexes.</p>
           </div>
         </div>
