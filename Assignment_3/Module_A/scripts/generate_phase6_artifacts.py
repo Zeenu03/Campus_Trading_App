@@ -2,7 +2,8 @@
 
 This script runs:
 1) Full unittest suite for phases 1-5.
-2) Deterministic ACID demo scenarios (commit, rollback, recovery undo/redo).
+2) Deterministic ACID demo scenarios (multi-table commit/rollback, recovery undo/redo).
+3) Explicit manual API: BEGIN → tx_insert → COMMIT, and BEGIN → tx_insert → ROLLBACK.
 
 Outputs are written to Module_A/artifacts:
 - phase6_summary.json
@@ -24,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from database import DatabaseManager, RecoveryManager  # noqa: E402
+from database.campus_workflow import accept_offer_atomic  # noqa: E402
 
 TEST_MODULES = [
     "tests/test_phase1_transactions.py",
@@ -36,6 +38,12 @@ TEST_MODULES = [
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _fresh_wal(wal_path: Path) -> None:
+    """Remove stale WAL so each demo run produces a clean, readable log."""
+    if wal_path.exists():
+        wal_path.unlink()
 
 
 def _create_core_tables(dbm: DatabaseManager) -> None:
@@ -158,11 +166,13 @@ def _run_unittest_suite() -> Dict[str, Any]:
 
 def _scenario_atomic_success(base_dir: Path) -> Dict[str, Any]:
     wal_path = base_dir / "atomic_success_wal.log"
+    _fresh_wal(wal_path)
     dbm = DatabaseManager(wal_path=str(wal_path))
     _create_core_tables(dbm)
     _seed_listing_and_offers(dbm)
 
-    ok, msg = dbm.accept_offer_atomic(
+    ok, msg = accept_offer_atomic(
+        dbm,
         db_name="campus",
         offer_id=501,
         acting_seller_id=9001,
@@ -194,11 +204,13 @@ def _scenario_atomic_success(base_dir: Path) -> Dict[str, Any]:
 
 def _scenario_atomic_failure_rollback(base_dir: Path) -> Dict[str, Any]:
     wal_path = base_dir / "atomic_failure_wal.log"
+    _fresh_wal(wal_path)
     dbm = DatabaseManager(wal_path=str(wal_path))
     _create_core_tables(dbm)
     _seed_listing_and_offers(dbm)
 
-    ok, msg = dbm.accept_offer_atomic(
+    ok, msg = accept_offer_atomic(
+        dbm,
         db_name="campus",
         offer_id=501,
         acting_seller_id=9001,
@@ -247,6 +259,7 @@ def _create_offer_only_db(wal_path: Path) -> DatabaseManager:
 
 def _scenario_recovery_undo(base_dir: Path) -> Dict[str, Any]:
     wal_path = base_dir / "recovery_undo_wal.log"
+    _fresh_wal(wal_path)
     dbm = _create_offer_only_db(wal_path)
 
     tx_id = dbm.begin_transaction()
@@ -284,8 +297,87 @@ def _scenario_recovery_undo(base_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _scenario_explicit_commit(base_dir: Path) -> Dict[str, Any]:
+    """Demonstrate BEGIN → change → COMMIT (normal commit path, manual API)."""
+    wal_path = base_dir / "explicit_commit_wal.log"
+    _fresh_wal(wal_path)
+    dbm = _create_offer_only_db(wal_path)
+
+    tx_id = dbm.begin_transaction()
+    ok, msg = dbm.tx_insert(
+        tx_id,
+        "campus",
+        "Offer",
+        {
+            "OfferID": 601,
+            "ListingID": 1,
+            "BuyerID": 99,
+            "OfferStatus": "Submitted",
+            "AgreedPrice": 0.0,
+        },
+    )
+    if not ok:
+        raise RuntimeError(msg)
+    c_ok, c_msg = dbm.commit_transaction(tx_id)
+    table, _ = dbm.get_table("campus", "Offer")
+    row = table.get(601)
+    return {
+        "tx_id": tx_id,
+        "commit_ok": c_ok,
+        "commit_message": c_msg,
+        "row_present_after_commit": row is not None,
+        "wal_tail_types": [e.get("type") for e in dbm.wal.read_entries()[-5:]],
+        "invariants": {
+            "commit_succeeded": c_ok,
+            "row_visible_after_commit": row is not None,
+        },
+    }
+
+
+def _scenario_explicit_manual_rollback(base_dir: Path) -> Dict[str, Any]:
+    """Demonstrate BEGIN → change → ROLLBACK (manual rollback; row must not persist)."""
+    wal_path = base_dir / "explicit_rollback_wal.log"
+    _fresh_wal(wal_path)
+    dbm = _create_offer_only_db(wal_path)
+
+    tx_id = dbm.begin_transaction()
+    ok, msg = dbm.tx_insert(
+        tx_id,
+        "campus",
+        "Offer",
+        {
+            "OfferID": 602,
+            "ListingID": 2,
+            "BuyerID": 88,
+            "OfferStatus": "Submitted",
+            "AgreedPrice": 0.0,
+        },
+    )
+    if not ok:
+        raise RuntimeError(msg)
+    table, _ = dbm.get_table("campus", "Offer")
+    visible_mid_tx = table.get(602) is not None
+
+    r_ok, r_msg = dbm.rollback_transaction(tx_id)
+    row_after = table.get(602)
+
+    return {
+        "tx_id": tx_id,
+        "visible_mid_transaction": visible_mid_tx,
+        "rollback_ok": r_ok,
+        "rollback_message": r_msg,
+        "row_absent_after_rollback": row_after is None,
+        "wal_tail_types": [e.get("type") for e in dbm.wal.read_entries()[-5:]],
+        "invariants": {
+            "rollback_succeeded": r_ok,
+            "no_partial_row_after_rollback": row_after is None,
+        },
+    }
+
+
 def _scenario_recovery_redo(base_dir: Path) -> Dict[str, Any]:
     wal_path = base_dir / "recovery_redo_wal.log"
+    _fresh_wal(wal_path)
 
     writer = _create_offer_only_db(wal_path)
     tx_id = writer.begin_transaction()
@@ -362,9 +454,21 @@ def _write_markdown(summary: Dict[str, Any], md_path: Path) -> None:
         f"- Recovery summary: `{demos['recovery_redo']['recovery']}`",
         f"- Invariants: `{demos['recovery_redo']['invariants']}`",
         "",
+        "### Explicit BEGIN / COMMIT (Manual API)",
+        f"- Commit ok: `{demos['explicit_commit']['commit_ok']}`",
+        f"- WAL tail (last types): `{demos['explicit_commit']['wal_tail_types']}`",
+        f"- Invariants: `{demos['explicit_commit']['invariants']}`",
+        "",
+        "### Explicit BEGIN / ROLLBACK (Manual API)",
+        f"- Rollback ok: `{demos['explicit_manual_rollback']['rollback_ok']}`",
+        f"- WAL tail (last types): `{demos['explicit_manual_rollback']['wal_tail_types']}`",
+        f"- Invariants: `{demos['explicit_manual_rollback']['invariants']}`",
+        "",
         "## Files",
         "- `artifacts/phase6_summary.json`",
+        "- `artifacts/phase6_summary.md`",
         "- `artifacts/unittest_output.txt`",
+        "- `artifacts/*_wal.log` (scenario WAL traces, including `explicit_commit_wal.log` and `explicit_rollback_wal.log`)",
     ]
 
     md_path.write_text("\n".join(lines), encoding="utf-8")
@@ -385,6 +489,8 @@ def main() -> int:
         "atomic_failure_rollback": _scenario_atomic_failure_rollback(artifacts_dir),
         "recovery_undo": _scenario_recovery_undo(artifacts_dir),
         "recovery_redo": _scenario_recovery_redo(artifacts_dir),
+        "explicit_commit": _scenario_explicit_commit(artifacts_dir),
+        "explicit_manual_rollback": _scenario_explicit_manual_rollback(artifacts_dir),
     }
 
     summary = {

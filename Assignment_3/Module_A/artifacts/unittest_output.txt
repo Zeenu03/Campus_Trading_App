@@ -27,10 +27,14 @@
 
 [Phase 5] Isolation: competing offers on one listing -> single winner
 
+[Phase 5] Isolation: cross-listing transactions are fully serialized (non-overlapping)
+
 [Phase 5] Isolation: many threads same offer -> one commit
 
-...............
+[Phase 5] Isolation: run_transaction helper -> single serialized path
+
+.................
 ----------------------------------------------------------------------
-Ran 15 tests in 0.255s
+Ran 17 tests in 0.011s
 
 OK

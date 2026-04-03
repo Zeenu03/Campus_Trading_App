@@ -1,9 +1,4 @@
-"""
-Crash recovery scaffolding for Assignment 3 Module A.
-
-Phase 0 provides log analysis and a recovery summary. REDO/UNDO application
-hooks will be implemented in a later phase.
-"""
+"""WAL analysis and REDO/UNDO replay into a DatabaseManager."""
 
 from __future__ import annotations
 
@@ -61,7 +56,7 @@ class RecoveryManager:
         )
 
     def recover(self) -> Dict[str, Any]:
-        """Return recovery plan summary without mutating table state."""
+        """Return a plan summary (counts and tx sets) without mutating tables."""
         summary = self.analyze()
         return {
             "status": "ok",
@@ -81,19 +76,8 @@ class RecoveryManager:
         return qualified_name.split(".", 1)
 
     @staticmethod
-    def _change_entries_for_tx(entries: List[Dict[str, Any]], tx_id: str) -> List[Dict[str, Any]]:
-        # Filter entries for the given tx_id and return only INSERT, UPDATE, DELETE entries
-        out: List[Dict[str, Any]] = []
-        for entry in entries:
-            if entry.get("tx_id") != tx_id:
-                continue
-            if entry.get("type") in {"INSERT", "UPDATE", "DELETE"}:
-                out.append(entry)
-        return out
-
-    @staticmethod
-    def _apply_row_image(table: Any, key_field: str, key_value: Any, row_image: Dict[str, Any]) -> None:
-        """Idempotently apply a full row image at a key."""
+    def _apply_row_image(table: Any, key_value: Any, row_image: Dict[str, Any]) -> None:
+        """Idempotently ensure *row_image* is stored at *key_value*."""
         current = table.get(key_value)
         if current is None:
             table.insert(row_image)
@@ -123,7 +107,7 @@ class RecoveryManager:
             if not isinstance(after, dict):
                 return 0
             target_key = after.get(key_field, key)
-            RecoveryManager._apply_row_image(table, key_field, target_key, after)
+            RecoveryManager._apply_row_image(table, target_key, after)
             return 1
 
         if entry.get("type") == "UPDATE":
@@ -135,7 +119,7 @@ class RecoveryManager:
             if old_key != new_key and table.get(old_key) is not None:
                 table.delete(old_key) 
 
-            RecoveryManager._apply_row_image(table, key_field, new_key, after)
+            RecoveryManager._apply_row_image(table, new_key, after)
             return 1
 
         if entry.get("type") == "DELETE":
@@ -175,7 +159,7 @@ class RecoveryManager:
         # Undo DELETE => restore before image.
         if isinstance(before, dict) and after is None:
             restore_key = before.get(key_field, key)
-            RecoveryManager._apply_row_image(table, key_field, restore_key, before)
+            RecoveryManager._apply_row_image(table, restore_key, before)
             return 1
 
         # Undo UPDATE => restore before image, handling key moves.
@@ -185,7 +169,7 @@ class RecoveryManager:
             if before_key != after_key and table.get(after_key) is not None:
                 table.delete(after_key)
 
-            RecoveryManager._apply_row_image(table, key_field, before_key, before)
+            RecoveryManager._apply_row_image(table, before_key, before)
             return 1
 
         return 0

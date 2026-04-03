@@ -1,23 +1,34 @@
 """
 Database manager for organizing multiple logical databases and tables.
 
-This mirrors the instructor template workflow while using this module's Table
-and B+ Tree implementations.
+The DatabaseManager is intentionally schema-neutral: it knows nothing about
+campus-specific table names or column layouts. Domain workflows (e.g.
+accept_offer_atomic) live in campus_workflow.py instead.
 """
 
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple
+import threading
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Generator, List, Tuple
 
 from .table import Table
-from .transaction import ChangeRecord, TransactionManager, TransactionState
+from .transaction import ChangeRecord, TransactionContext, TransactionManager, TransactionState
 from .wal import WriteAheadLog
 
 
 class DatabaseManager:
-    """Manage logical databases where each database contains named tables."""
+    """Manage logical databases where each database contains named tables.
+
+    Isolation level: SERIALIZABLE — a single global mutex (``_serial_lock``)
+    is held for the full duration of each transactional operation so concurrent
+    callers execute strictly one after another with no interleaving.
+
+    This class is schema-neutral. Campus-specific domain workflows
+    (e.g. accept_offer_atomic) live in ``campus_workflow`` and call
+    ``isolation()`` to acquire the lock before beginning a transaction.
+    """
 
     def __init__(self, wal_path: str | None = None):
         self.databases: Dict[str, Dict[str, Table]] = {}
@@ -28,6 +39,72 @@ class DatabaseManager:
 
         self.wal = WriteAheadLog(wal_path)
         self.tx_manager = TransactionManager(self.wal, undo_change=self._undo_change)
+        # Global serialization mutex: ensures at most one transaction is live
+        # at any point in time across all threads (serializable isolation).
+        self._serial_lock = threading.Lock()
+
+    @contextmanager
+    def serialized_transaction(self) -> Generator[str, None, None]:
+        """Context manager: acquire the serial lock, begin a transaction, yield
+        the ``tx_id``, then commit on clean exit or rollback on exception.
+
+        Usage::
+
+            with dbm.serialized_transaction() as tx_id:
+                dbm.tx_insert(tx_id, "mydb", "MyTable", record)
+                # commit happens automatically on clean exit
+            # rollback happens automatically on any exception
+
+        The global lock is held for the entire duration so no other thread can
+        begin a transaction until this one completes — serializable isolation.
+        """
+        with self._serial_lock:
+            tx_id = self.begin_transaction()
+            try:
+                yield tx_id
+                self.commit_transaction(tx_id)
+            except Exception:
+                self.rollback_transaction(tx_id)
+                raise
+
+    @contextmanager
+    def isolation(self) -> Generator[None, None, None]:
+        """Acquire the global serial lock for the duration of the block.
+
+        Use this when you need to manually manage begin/commit/rollback within
+        the serializable isolation boundary (e.g. in domain workflow functions)::
+
+            with dbm.isolation():
+                tx_id = dbm.begin_transaction()
+                try:
+                    dbm.tx_update(tx_id, db, table, key, row)
+                    dbm.commit_transaction(tx_id)
+                except Exception:
+                    dbm.rollback_transaction(tx_id)
+                    raise
+
+        Unlike ``serialized_transaction``, this does not begin or commit a
+        transaction automatically — the caller controls the lifecycle.
+        """
+        with self._serial_lock:
+            yield
+
+    def run_transaction(self, fn: Callable[[str], Any], *args: Any, **kwargs: Any) -> Tuple[bool, str, Any]:
+        """Execute *fn(tx_id, *args, **kwargs)* inside a serialized transaction.
+
+        Returns ``(ok, message, result)`` where *result* is whatever *fn* returns.
+        The global serial lock is held for the full duration of *fn*, guaranteeing
+        serializable isolation even when called concurrently from multiple threads.
+        """
+        with self._serial_lock:
+            tx_id = self.begin_transaction()
+            try:
+                result = fn(tx_id, *args, **kwargs)
+                ok, msg = self.commit_transaction(tx_id)
+                return ok, msg, result
+            except Exception as exc:
+                self.rollback_transaction(tx_id)
+                return False, str(exc), None
 
     @staticmethod
     def _qualified_table_name(db_name: str, table_name: str) -> str:
@@ -35,324 +112,20 @@ class DatabaseManager:
 
     @staticmethod
     def _split_qualified_table_name(qualified_name: str) -> Tuple[str, str]:
+        """Split a qualified table name into database name and table name."""
         if "." not in qualified_name:
             raise ValueError(f"Invalid qualified table name: {qualified_name}")
         return qualified_name.split(".", 1)
 
-    @staticmethod
-    def _resource_id(db_name: str, table_name: str, key: Any) -> str:
-        return f"{db_name}:{table_name}:{key}"
-
-    @staticmethod
-    def _iso_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
-
-    @staticmethod
-    def _init_record_for_schema(table: Table) -> Dict[str, Any]:
-        """Build a full record with None defaults for all schema columns."""
-        return {column: None for column in table.schema.keys()}
-
-    @staticmethod
-    def _next_numeric_key(table: Table, key_name: str) -> int:
-        """Return next integer key value based on current table contents."""
-        max_key = 0
-        for key, _ in table.get_all():
-            if isinstance(key, int) and key > max_key:
-                max_key = key
-        return max_key + 1
-
-    def _build_transaction_record(
-        self,
-        tx_table: Table,
-        tx_id: int,
-        listing_id: int,
-        seller_id: int,
-        buyer_id: int,
-        offer_id: int,
-        agreed_price: float,
-    ) -> Dict[str, Any]:
-        record = self._init_record_for_schema(tx_table)
-
-        if "TransactionID" in record:
-            record["TransactionID"] = tx_id
-        if "ListingID" in record:
-            record["ListingID"] = listing_id
-        if "SellerID" in record:
-            record["SellerID"] = seller_id
-        if "BuyerID" in record:
-            record["BuyerID"] = buyer_id
-        if "OfferID" in record:
-            record["OfferID"] = offer_id
-        if "AgreedPrice" in record:
-            record["AgreedPrice"] = float(agreed_price)
-        if "Status" in record:
-            record["Status"] = "Scheduled"
-        if "CreatedDate" in record and tx_table.schema.get("CreatedDate") is str:
-            record["CreatedDate"] = self._iso_now()
-
-        return record
-
-    def _build_notification_record(
-        self,
-        notification_table: Table,
-        notification_id: int,
-        recipient_id: int,
-        notification_type: str,
-        message: str,
-        listing_id: int,
-        offer_id: int,
-        transaction_id: int,
-    ) -> Dict[str, Any]:
-        record = self._init_record_for_schema(notification_table)
-
-        if "NotificationID" in record:
-            record["NotificationID"] = notification_id
-        if "RecipientID" in record:
-            record["RecipientID"] = recipient_id
-        if "NotificationType" in record:
-            record["NotificationType"] = notification_type
-        if "Title" in record:
-            record["Title"] = notification_type
-        if "Message" in record:
-            record["Message"] = message
-        if "RelatedListingID" in record:
-            record["RelatedListingID"] = listing_id
-        if "RelatedOfferID" in record:
-            record["RelatedOfferID"] = offer_id
-        if "RelatedTransactionID" in record:
-            record["RelatedTransactionID"] = transaction_id
-        if "CreatedDate" in record and notification_table.schema.get("CreatedDate") is str:
-            record["CreatedDate"] = self._iso_now()
-
-        return record
-
-    def accept_offer_atomic(
-        self,
-        db_name: str,
-        offer_id: int,
-        acting_seller_id: int,
-        agreed_price: float | None = None,
-        include_notifications: bool = True,
-        create_declined_transactions: bool = True,
-        fail_after_step: int | None = None,
-    ) -> Tuple[bool, str]:
-        """Phase 2 service: accept an offer with multi-table atomic side effects.
-
-        Steps:
-        1) Accept chosen offer.
-        2) Decline competing submitted offers on the same listing.
-        3) Mark listing as sold.
-        4) Insert transaction row(s).
-        5) Insert notification row(s) (optional).
-        """
-
-        def maybe_fail(step_no: int) -> None:
-            if fail_after_step is not None and fail_after_step == step_no:
-                raise RuntimeError(f"Injected failure after step {step_no}")
-
-        tx_id = self.begin_transaction()
-
+    def _active_tx(self, tx_id: str) -> Tuple[TransactionContext | None, str]:
+        """Return ``(context, \"OK\")`` or ``(None, error_message)``."""
         try:
-            offer_table, msg = self.get_table(db_name, "Offer")
-            if offer_table is None:
-                raise RuntimeError(msg)
-
-            listing_table, msg = self.get_table(db_name, "Listing")
-            if listing_table is None:
-                raise RuntimeError(msg)
-
-            transaction_table, msg = self.get_table(db_name, "Transaction")
-            if transaction_table is None:
-                raise RuntimeError(msg)
-
-            notification_table: Table | None = None
-            if include_notifications:
-                notification_table, _ = self.get_table(db_name, "Notification")
-
-            target_offer, msg = self.tx_get(tx_id, db_name, "Offer", offer_id)
-            if target_offer is None:
-                raise RuntimeError(msg if msg != "OK" else f"Offer '{offer_id}' not found")
-
-            if target_offer.get("OfferStatus") != "Submitted":
-                raise RuntimeError("Offer is no longer active")
-
-            listing_id = target_offer.get("ListingID")
-            buyer_id = target_offer.get("BuyerID")
-            offered_price = target_offer.get("OfferedPrice")
-
-            if not isinstance(listing_id, int):
-                raise RuntimeError("Offer record missing valid ListingID")
-            if not isinstance(buyer_id, int):
-                raise RuntimeError("Offer record missing valid BuyerID")
-
-            listing_lock = self._resource_id(db_name, "Listing", listing_id)
-            if not self.tx_manager.lock_manager.acquire(tx_id, listing_lock, timeout=1.0):
-                raise RuntimeError(f"Could not acquire lock for {listing_lock}")
-
-            listing_row, msg = self.tx_get(tx_id, db_name, "Listing", listing_id)
-            if listing_row is None:
-                raise RuntimeError(msg if msg != "OK" else f"Listing '{listing_id}' not found")
-
-            seller_id = listing_row.get("SellerID")
-            status = listing_row.get("Status")
-
-            if seller_id != acting_seller_id:
-                raise RuntimeError("Only the listing owner can accept this offer")
-            if status not in {"Listed", "Pending"}:
-                raise RuntimeError("Listing is not available for offer acceptance")
-            if buyer_id == acting_seller_id:
-                raise RuntimeError("Buyer and seller cannot be the same member")
-
-            agreed = float(agreed_price if agreed_price is not None else offered_price)
-            if agreed <= 0:
-                raise RuntimeError("Agreed price must be > 0")
-
-            accepted_offer = dict(target_offer)
-            accepted_offer["OfferStatus"] = "Accepted"
-            if "AgreedPrice" in accepted_offer:
-                accepted_offer["AgreedPrice"] = agreed
-            if "ResponseDate" in accepted_offer and offer_table.schema.get("ResponseDate") is str:
-                accepted_offer["ResponseDate"] = self._iso_now()
-
-            ok, msg = self.tx_update(tx_id, db_name, "Offer", offer_id, accepted_offer)
-            if not ok:
-                raise RuntimeError(msg)
-            maybe_fail(1)
-
-            competing: List[Tuple[int, Dict[str, Any]]] = []
-            for key, row in offer_table.get_all():
-                if (
-                    row.get("ListingID") == listing_id
-                    and row.get("OfferStatus") == "Submitted"
-                    and key != offer_id
-                ):
-                    competing.append((int(key), dict(row)))
-
-            for other_offer_id, other_row in competing:
-                declined_row = dict(other_row)
-                declined_row["OfferStatus"] = "Declined"
-                if "Reason" in declined_row:
-                    declined_row["Reason"] = "Sold to another buyer"
-                if "ResponseDate" in declined_row and offer_table.schema.get("ResponseDate") is str:
-                    declined_row["ResponseDate"] = self._iso_now()
-
-                ok, msg = self.tx_update(tx_id, db_name, "Offer", other_offer_id, declined_row)
-                if not ok:
-                    raise RuntimeError(msg)
-            maybe_fail(2)
-
-            updated_listing = dict(listing_row)
-            updated_listing["Status"] = "Sold"
-            if "LastModifiedDate" in updated_listing and listing_table.schema.get("LastModifiedDate") is str:
-                updated_listing["LastModifiedDate"] = self._iso_now()
-
-            ok, msg = self.tx_update(tx_id, db_name, "Listing", listing_id, updated_listing)
-            if not ok:
-                raise RuntimeError(msg)
-            maybe_fail(3)
-
-            accepted_txn_id = self._next_numeric_key(transaction_table, transaction_table.search_key)
-            accepted_txn_record = self._build_transaction_record(
-                transaction_table,
-                accepted_txn_id,
-                listing_id,
-                acting_seller_id,
-                buyer_id,
-                offer_id,
-                agreed,
-            )
-            ok, msg = self.tx_insert(tx_id, db_name, "Transaction", accepted_txn_record)
-            if not ok:
-                raise RuntimeError(msg)
-
-            declined_txns: List[Tuple[int, int]] = []
-            if create_declined_transactions:
-                for other_offer_id, other_row in competing:
-                    other_buyer_id = other_row.get("BuyerID")
-                    other_price = float(other_row.get("OfferedPrice", 0.0))
-                    if not isinstance(other_buyer_id, int):
-                        continue
-
-                    next_txn_id = self._next_numeric_key(transaction_table, transaction_table.search_key)
-                    other_txn = self._build_transaction_record(
-                        transaction_table,
-                        next_txn_id,
-                        listing_id,
-                        acting_seller_id,
-                        other_buyer_id,
-                        other_offer_id,
-                        other_price,
-                    )
-                    ok, msg = self.tx_insert(tx_id, db_name, "Transaction", other_txn)
-                    if not ok:
-                        raise RuntimeError(msg)
-                    declined_txns.append((other_offer_id, next_txn_id))
-            maybe_fail(4)
-
-            if include_notifications and notification_table is not None:
-                winner_note_id = self._next_numeric_key(notification_table, notification_table.search_key)
-                winner_note = self._build_notification_record(
-                    notification_table,
-                    winner_note_id,
-                    buyer_id,
-                    "OfferAccepted",
-                    "Your offer has been accepted.",
-                    listing_id,
-                    offer_id,
-                    accepted_txn_id,
-                )
-                ok, msg = self.tx_insert(tx_id, db_name, "Notification", winner_note)
-                if not ok:
-                    raise RuntimeError(msg)
-
-                seller_note_id = self._next_numeric_key(notification_table, notification_table.search_key)
-                seller_note = self._build_notification_record(
-                    notification_table,
-                    seller_note_id,
-                    acting_seller_id,
-                    "TransactionCompleted",
-                    "Offer accepted and transaction created.",
-                    listing_id,
-                    offer_id,
-                    accepted_txn_id,
-                )
-                ok, msg = self.tx_insert(tx_id, db_name, "Notification", seller_note)
-                if not ok:
-                    raise RuntimeError(msg)
-
-                for other_offer_id, decline_txn_id in declined_txns:
-                    other_offer = offer_table.get(other_offer_id)
-                    if other_offer is None:
-                        continue
-                    other_buyer = other_offer.get("BuyerID")
-                    if not isinstance(other_buyer, int):
-                        continue
-
-                    note_id = self._next_numeric_key(notification_table, notification_table.search_key)
-                    lose_note = self._build_notification_record(
-                        notification_table,
-                        note_id,
-                        other_buyer,
-                        "OfferDeclined",
-                        "Another buyer's offer was accepted on this listing.",
-                        listing_id,
-                        other_offer_id,
-                        decline_txn_id,
-                    )
-                    ok, msg = self.tx_insert(tx_id, db_name, "Notification", lose_note)
-                    if not ok:
-                        raise RuntimeError(msg)
-            maybe_fail(5)
-
-            ok, msg = self.commit_transaction(tx_id)
-            if not ok:
-                raise RuntimeError(msg)
-
-            return True, f"Offer '{offer_id}' accepted atomically"
-
-        except Exception as exc:
-            self.rollback_transaction(tx_id)
-            return False, str(exc)
+            ctx = self.tx_manager.get(tx_id)
+        except KeyError as exc:
+            return None, str(exc)
+        if ctx.state != TransactionState.ACTIVE:
+            return None, f"Transaction '{tx_id}' is not active"
+        return ctx, "OK"
 
     def begin_transaction(self) -> str:
         """Start a transaction and return its id."""
@@ -499,14 +272,10 @@ class DatabaseManager:
         return table, "OK"
 
     def tx_get(self, tx_id: str, db_name: str, table_name: str, record_id: Any) -> Tuple[Dict[str, Any] | None, str]:
-        """Transaction-aware point read."""
-        try:
-            tx_ctx = self.tx_manager.get(tx_id)
-        except KeyError as exc:
-            return None, str(exc)
-
-        if tx_ctx.state != TransactionState.ACTIVE:
-            return None, f"Transaction '{tx_id}' is not active"
+        """Transaction-aware point read (no row lock; isolation is global serialization)."""
+        _, err = self._active_tx(tx_id)
+        if err != "OK":
+            return None, err
 
         table, msg = self.get_table(db_name, table_name)
         if table is None:
@@ -516,6 +285,10 @@ class DatabaseManager:
 
     def tx_insert(self, tx_id: str, db_name: str, table_name: str, record: Dict[str, Any]) -> Tuple[bool, str]:
         """Transaction-aware insert (upsert semantics inherited from Table.insert)."""
+        _, err = self._active_tx(tx_id)
+        if err != "OK":
+            return False, err
+
         table, msg = self.get_table(db_name, table_name)
         if table is None:
             return False, msg
@@ -523,18 +296,6 @@ class DatabaseManager:
         key = record.get(table.search_key)
         if key is None:
             return False, f"Record must include search key '{table.search_key}'"
-
-        try:
-            tx_ctx = self.tx_manager.get(tx_id)
-        except KeyError as exc:
-            return False, str(exc)
-
-        if tx_ctx.state != TransactionState.ACTIVE:
-            return False, f"Transaction '{tx_id}' is not active"
-
-        resource_id = self._resource_id(db_name, table_name, key)
-        if not self.tx_manager.lock_manager.acquire(tx_id, resource_id, timeout=1.0):
-            return False, f"Could not acquire lock for {resource_id}"
 
         before = table.get(key)
         ok, insert_msg = table.insert(record)
@@ -561,21 +322,13 @@ class DatabaseManager:
         new_record: Dict[str, Any],
     ) -> Tuple[bool, str]:
         """Transaction-aware update with before/after logging."""
+        _, err = self._active_tx(tx_id)
+        if err != "OK":
+            return False, err
+
         table, msg = self.get_table(db_name, table_name)
         if table is None:
             return False, msg
-
-        try:
-            tx_ctx = self.tx_manager.get(tx_id)
-        except KeyError as exc:
-            return False, str(exc)
-
-        if tx_ctx.state != TransactionState.ACTIVE:
-            return False, f"Transaction '{tx_id}' is not active"
-
-        resource_id = self._resource_id(db_name, table_name, record_id)
-        if not self.tx_manager.lock_manager.acquire(tx_id, resource_id, timeout=1.0):
-            return False, f"Could not acquire lock for {resource_id}"
 
         before = table.get(record_id)
         if before is None:
@@ -599,21 +352,13 @@ class DatabaseManager:
 
     def tx_delete(self, tx_id: str, db_name: str, table_name: str, record_id: Any) -> Tuple[bool, str]:
         """Transaction-aware delete with before-image logging."""
+        _, err = self._active_tx(tx_id)
+        if err != "OK":
+            return False, err
+
         table, msg = self.get_table(db_name, table_name)
         if table is None:
             return False, msg
-
-        try:
-            tx_ctx = self.tx_manager.get(tx_id)
-        except KeyError as exc:
-            return False, str(exc)
-
-        if tx_ctx.state != TransactionState.ACTIVE:
-            return False, f"Transaction '{tx_id}' is not active"
-
-        resource_id = self._resource_id(db_name, table_name, record_id)
-        if not self.tx_manager.lock_manager.acquire(tx_id, resource_id, timeout=1.0):
-            return False, f"Could not acquire lock for {resource_id}"
 
         before = table.get(record_id)
         if before is None:

@@ -1,9 +1,4 @@
-"""
-Write-ahead logging (WAL) scaffolding for Assignment 3 Module A.
-
-This module provides a simple JSONL append-only log with helper methods for
-transaction lifecycle and row-level change records.
-"""
+"""Append-only JSONL write-ahead log with monotonic LSN."""
 
 from __future__ import annotations
 
@@ -19,9 +14,9 @@ class WriteAheadLog:
 
     def __init__(self, log_path: str, sync_on_commit: bool = True):
         self.log_path = log_path
-        self.sync_on_commit = sync_on_commit
+        self.sync_on_commit = sync_on_commit 
         self._lock = threading.Lock()
-        self._lsn = 0       # LSN(log sequence number) counter for sequence numbers
+        self._lsn = 0
         self._bootstrap_lsn()
 
     def _bootstrap_lsn(self) -> None:
