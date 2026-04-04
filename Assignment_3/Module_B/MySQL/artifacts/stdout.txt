@@ -1,0 +1,404 @@
+=== concurrent_users (Concurrent Usage) ===
+passed: True
+{
+  "name": "concurrent_users",
+  "spec_requirement": "Concurrent Usage",
+  "passed": true,
+  "metrics": {
+    "ops_total": 70,
+    "ops_ok": 69,
+    "ops_fail": 1,
+    "success_rate": 0.9857,
+    "avg_ms": 48.3,
+    "p99_ms": 151.87,
+    "max_ms": 155.17,
+    "min_ms": 3.22,
+    "per_endpoint": {
+      "login": {
+        "avg_ms": 135.25,
+        "p99_ms": 151.87,
+        "max_ms": 155.17,
+        "min_ms": 78.46
+      },
+      "get_listings": {
+        "avg_ms": 9.27,
+        "p99_ms": 19.57,
+        "max_ms": 21.76,
+        "min_ms": 3.22
+      },
+      "get_notifications": {
+        "avg_ms": 11.95,
+        "p99_ms": 18.13,
+        "max_ms": 18.5,
+        "min_ms": 4.8
+      },
+      "create_listing": {
+        "avg_ms": 24.86,
+        "p99_ms": 26.1,
+        "max_ms": 26.77,
+        "min_ms": 22.01
+      },
+      "submit_offer": {
+        "avg_ms": 28.11,
+        "p99_ms": 28.31,
+        "max_ms": 29.95,
+        "min_ms": 26.5
+      }
+    },
+    "elapsed_ms": 223.89
+  },
+  "invariants": {
+    "n_threads": 20,
+    "threads_completed": 20,
+    "success_rate": 0.9857,
+    "server_errors_5xx": 0,
+    "no_server_errors": true,
+    "high_success_rate": true,
+    "server_error_details": []
+  },
+  "docker_stats_peak": {},
+  "notes": "20 users across 4 operation types launched simultaneously via Barrier. Roles: reader \u00d7 5, lister \u00d7 5, offerer \u00d7 5, notifier \u00d7 5.",
+  "docker_time_series_samples": 0
+}
+
+=== offer_race (Race Condition Testing) ===
+passed: True
+{
+  "name": "offer_race",
+  "spec_requirement": "Race Condition Testing",
+  "passed": true,
+  "metrics": {
+    "ops_total": 20,
+    "ops_ok": 11,
+    "ops_fail": 9,
+    "success_rate": 0.55,
+    "avg_ms": 50.09,
+    "p99_ms": 83.23,
+    "max_ms": 84.11,
+    "min_ms": 19.35,
+    "per_endpoint": {
+      "login": {
+        "avg_ms": 78.56,
+        "p99_ms": 83.23,
+        "max_ms": 84.11,
+        "min_ms": 73.15
+      },
+      "accept_offer": {
+        "avg_ms": 21.63,
+        "p99_ms": 22.72,
+        "max_ms": 22.82,
+        "min_ms": 19.35
+      }
+    },
+    "elapsed_ms": 111.72,
+    "per_thread": [
+      {
+        "idx": 9,
+        "offer_id": 1174,
+        "http_ok": true,
+        "status_code_ok": true,
+        "response": {
+          "message": "offer accepted",
+          "transaction_id": 349
+        },
+        "elapsed_ms": 19.37
+      },
+      {
+        "idx": 5,
+        "offer_id": 1170,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 20.36
+      },
+      {
+        "idx": 7,
+        "offer_id": 1172,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 20.87
+      },
+      {
+        "idx": 8,
+        "offer_id": 1173,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 22.17
+      },
+      {
+        "idx": 1,
+        "offer_id": 1166,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 21.93
+      },
+      {
+        "idx": 3,
+        "offer_id": 1168,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 22.66
+      },
+      {
+        "idx": 2,
+        "offer_id": 1167,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 22.83
+      },
+      {
+        "idx": 6,
+        "offer_id": 1171,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 22.73
+      },
+      {
+        "idx": 0,
+        "offer_id": 1165,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 21.78
+      },
+      {
+        "idx": 4,
+        "offer_id": 1169,
+        "http_ok": false,
+        "status_code_ok": false,
+        "response": {
+          "error": "listing is no longer available for offers"
+        },
+        "elapsed_ms": 21.71
+      }
+    ]
+  },
+  "invariants": {
+    "n_concurrent_accepts": 10,
+    "http_successes": 1,
+    "http_failures": 9,
+    "db_ground_truth": {
+      "listing_id": 174,
+      "listing_status": "Sold",
+      "accepted_offers": 1,
+      "declined_offers": 9,
+      "submitted_offers": 0,
+      "total_transactions": 10,
+      "expected_transactions": 10,
+      "n_buyers": 10,
+      "listing_sold": true,
+      "exactly_one_accepted": true,
+      "transaction_count_correct": true,
+      "race_condition_detected": false,
+      "all_invariants_pass": true
+    },
+    "race_condition_detected": false,
+    "exactly_one_winner": true,
+    "all_invariants_pass": true
+  },
+  "docker_stats_peak": {},
+  "notes": "MySQL isolation (InnoDB row locks + deadlock detection) fully contained the race: exactly 1 offer accepted, listing Sold, 10 transactions (expected 10).",
+  "docker_time_series_samples": 0
+}
+
+=== failure_simulation (Failure Simulation) ===
+passed: True
+{
+  "name": "failure_simulation",
+  "spec_requirement": "Failure Simulation",
+  "passed": true,
+  "metrics": {
+    "ops_total": 20,
+    "ops_ok": 14,
+    "ops_fail": 6,
+    "success_rate": 0.7,
+    "avg_ms": 43.63,
+    "p99_ms": 79.87,
+    "max_ms": 80.25,
+    "min_ms": 2.79,
+    "per_endpoint": {
+      "login": {
+        "avg_ms": 78.55,
+        "p99_ms": 79.87,
+        "max_ms": 80.25,
+        "min_ms": 76.27
+      },
+      "submit_offer": {
+        "avg_ms": 8.7,
+        "p99_ms": 11.31,
+        "max_ms": 17.39,
+        "min_ms": 2.79
+      }
+    }
+  },
+  "invariants": {
+    "n_concurrent_writers": 10,
+    "container_stopped": true,
+    "container_restarted": true,
+    "mysql_recovered": true,
+    "requests_committed_before_kill": 4,
+    "requests_failed_during_kill": 6,
+    "pre_failure_table_counts": {
+      "Listing": 178,
+      "Offer": 224,
+      "Transaction": 351,
+      "Notification": 1566,
+      "Member": 250
+    },
+    "post_recovery_table_counts": {
+      "Listing": 178,
+      "Offer": 228,
+      "Transaction": 351,
+      "Notification": 1570,
+      "Member": 250
+    },
+    "integrity_check": {
+      "orphan_transactions": {
+        "orphan_transaction_ids": [],
+        "orphan_count": 0,
+        "clean": true
+      },
+      "accepted_without_transaction": {
+        "offer_ids_without_transaction": [],
+        "violation_count": 0,
+        "clean": true
+      },
+      "sold_without_transaction": {
+        "listing_id_mismatches": [],
+        "violation_count": 0,
+        "clean": true
+      },
+      "all_clean": true
+    },
+    "no_orphan_data": true
+  },
+  "docker_stats_peak": {},
+  "notes": "10 concurrent offer-submissions with MySQL killed mid-way (4 committed, 6 failed/aborted). Post-restart full_integrity_check validates InnoDB atomicity: every in-flight transaction at kill time was automatically rolled back.",
+  "docker_time_series_samples": 0
+}
+
+=== stress_bulk (Stress Testing) ===
+passed: True
+{
+  "name": "stress_bulk",
+  "spec_requirement": "Stress Testing",
+  "passed": true,
+  "metrics": {
+    "ops_total": 1000,
+    "ops_ok": 1000,
+    "ops_fail": 0,
+    "success_rate": 1.0,
+    "avg_ms": 41.34,
+    "p99_ms": 118.01,
+    "max_ms": 201.06,
+    "min_ms": 5.62,
+    "per_endpoint": {
+      "get_notifications": {
+        "avg_ms": 24.11,
+        "p99_ms": 78.48,
+        "max_ms": 148.4,
+        "min_ms": 5.62
+      },
+      "get_transactions": {
+        "avg_ms": 24.85,
+        "p99_ms": 74.44,
+        "max_ms": 137.18,
+        "min_ms": 6.81
+      },
+      "get_listings": {
+        "avg_ms": 24.0,
+        "p99_ms": 67.82,
+        "max_ms": 110.77,
+        "min_ms": 7.72
+      },
+      "get_listing": {
+        "avg_ms": 31.99,
+        "p99_ms": 150.64,
+        "max_ms": 172.62,
+        "min_ms": 6.37
+      },
+      "submit_offer": {
+        "avg_ms": 65.08,
+        "p99_ms": 118.27,
+        "max_ms": 201.06,
+        "min_ms": 6.84
+      }
+    },
+    "elapsed_ms": 8810.99,
+    "ops_per_second": 113.49,
+    "target_ops": 1000,
+    "concurrency": 20,
+    "throughput_time_series": [
+      {
+        "t_offset_s": 5.0,
+        "ops_per_sec": 111.2,
+        "success_rate": 1.0
+      },
+      {
+        "t_offset_s": 10.0,
+        "ops_per_sec": 88.8,
+        "success_rate": 1.0
+      }
+    ]
+  },
+  "invariants": {
+    "target_ops": 1000,
+    "ops_attempted": 1000,
+    "success_rate": 1.0,
+    "ops_per_second": 113.49,
+    "latency_avg_ms": 41.34,
+    "latency_p99_ms": 118.01,
+    "latency_max_ms": 201.06,
+    "integrity_after_load": {
+      "orphan_transactions": {
+        "orphan_transaction_ids": [],
+        "orphan_count": 0,
+        "clean": true
+      },
+      "accepted_without_transaction": {
+        "offer_ids_without_transaction": [],
+        "violation_count": 0,
+        "clean": true
+      },
+      "sold_without_transaction": {
+        "listing_id_mismatches": [],
+        "violation_count": 0,
+        "clean": true
+      },
+      "all_clean": true
+    },
+    "integrity_clean": true,
+    "high_success_rate": true
+  },
+  "docker_stats_peak": {
+    "cpu_pct": 75.36,
+    "mem_mb": 467.1,
+    "avg_cpu_pct": 65.82,
+    "avg_mem_mb": 458.92,
+    "samples": 4
+  },
+  "notes": "1000 mixed API calls, 20 concurrent workers. Mix: 60 % reads (GET listings/notifications/transactions/listing), 40 % writes (POST offer submissions \u2014 idempotent ON DUPLICATE KEY UPDATE). MySQL container CPU/memory polled every 1 s during load.",
+  "docker_time_series_samples": 4
+}

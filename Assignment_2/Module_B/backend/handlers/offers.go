@@ -233,11 +233,37 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	_ = mw.SetSessionVars(tx, mw.GetSessionID(ctx), mw.GetUserID(ctx))
 
-	_, err = tx.ExecContext(ctx,
-		`UPDATE Offer SET OfferStatus = 'Accepted', AgreedPrice = ?, ResponseDate = NOW() WHERE OfferID = ?`,
+	// ── Serialise concurrent accepts with SELECT … FOR UPDATE ─────────────────
+	// Acquiring an exclusive lock on the Listing row here forces all concurrent
+	// AcceptOffer calls for the same listing to queue up.  The second thread that
+	// arrives will block here until the first transaction commits, then find
+	// Status = 'Sold' and exit with 409 — eliminating the TOCTOU window entirely.
+	var currentListingStatus string
+	err = tx.QueryRowContext(ctx,
+		`SELECT Status FROM Listing WHERE ListingID = ? FOR UPDATE`, listingID,
+	).Scan(&currentListingStatus)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "listing lock failed")
+		return
+	}
+	if currentListingStatus != "Listed" {
+		respondError(w, http.StatusConflict, "listing is no longer available for offers")
+		return
+	}
+
+	// Only accept if the offer is still Submitted (re-check inside the TX).
+	// Another thread may have declined this specific offer while we were waiting
+	// for the listing lock above.
+	res, err := tx.ExecContext(ctx,
+		`UPDATE Offer SET OfferStatus = 'Accepted', AgreedPrice = ?, ResponseDate = NOW()
+         WHERE OfferID = ? AND OfferStatus = 'Submitted'`,
 		offeredPrice, offerID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "accept failed")
+		return
+	}
+	if affected, _ := res.RowsAffected(); affected == 0 {
+		respondError(w, http.StatusConflict, "offer is no longer active")
 		return
 	}
 
@@ -268,7 +294,7 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 	_, _ = tx.ExecContext(ctx,
 		`DELETE FROM Watchlist WHERE ListingID = ?`, listingID)
 
-	res, err := tx.ExecContext(ctx,
+	res, err = tx.ExecContext(ctx,
 		`INSERT INTO Transaction (ListingID, SellerID, BuyerID, OfferID, AgreedPrice)
          VALUES (?, ?, ?, ?, ?)`,
 		listingID, sellerID, buyerID, offerID, offeredPrice)

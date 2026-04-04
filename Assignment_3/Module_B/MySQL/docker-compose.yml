@@ -1,0 +1,29 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: campus_a3_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: CampusTradingB
+    ports:
+      - "3306:3306"
+    volumes:
+      # Reference the init.sql from Assignment 2 (path is relative to this file)
+      - ../../../Assignment_2/Module_B/sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - mysql_a3_data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --performance_schema=ON
+      --slow_query_log=ON
+      --long_query_time=0.1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+
+volumes:
+  mysql_a3_data:
