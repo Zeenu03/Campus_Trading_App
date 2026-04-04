@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from database import DatabaseManager
+from database.campus_workflow import accept_offer_atomic
 
 
 class TestPhase2AcceptOffer(unittest.TestCase):
@@ -135,7 +136,8 @@ class TestPhase2AcceptOffer(unittest.TestCase):
 
     def test_accept_offer_success_commits_all_side_effects(self) -> None:
         self._log_case("Accept offer success -> all side effects committed")
-        ok, msg = self.dbm.accept_offer_atomic(
+        ok, msg = accept_offer_atomic(
+            self.dbm,
             db_name="campus",
             offer_id=10,
             acting_seller_id=501,
@@ -167,7 +169,8 @@ class TestPhase2AcceptOffer(unittest.TestCase):
 
     def test_failure_injection_rolls_back_everything(self) -> None:
         self._log_case("Failure injection -> full rollback of side effects")
-        ok, _ = self.dbm.accept_offer_atomic(
+        ok, _ = accept_offer_atomic(
+            self.dbm,
             db_name="campus",
             offer_id=10,
             acting_seller_id=501,
@@ -194,7 +197,8 @@ class TestPhase2AcceptOffer(unittest.TestCase):
         self._log_case("Consistency: wrong seller -> abort, no state change")
         before = self._state_snapshot()
 
-        ok, msg = self.dbm.accept_offer_atomic(
+        ok, msg = accept_offer_atomic(
+            self.dbm,
             db_name="campus",
             offer_id=10,
             acting_seller_id=9999,
@@ -217,7 +221,8 @@ class TestPhase2AcceptOffer(unittest.TestCase):
         self.assertTrue(ok, msg)
 
         before = self._state_snapshot()
-        ok, msg = self.dbm.accept_offer_atomic(
+        ok, msg = accept_offer_atomic(
+            self.dbm,
             db_name="campus",
             offer_id=10,
             acting_seller_id=501,
@@ -239,7 +244,8 @@ class TestPhase2AcceptOffer(unittest.TestCase):
         self.assertTrue(ok, msg)
 
         before = self._state_snapshot()
-        ok, msg = self.dbm.accept_offer_atomic(
+        ok, msg = accept_offer_atomic(
+            self.dbm,
             db_name="campus",
             offer_id=10,
             acting_seller_id=501,
