@@ -27,7 +27,7 @@
 
 The system is built as a layered engine on top of the B+ Tree data structure developed in Assignment 2. Rather than introducing a separate data store, every modification goes through the B+ Tree — it is simultaneously the storage engine, the index, and the only access path for all records.
 
-![System Architecture](./module_a_architecture.png)
+![System Architecture](./assets/module_a_architecture.png)
 
 The five layers from bottom to top are:
 
@@ -369,7 +369,7 @@ All four tables participate in the single `accept_offer_atomic` transaction, ens
 
 This is the central business operation: a seller accepts one of the submitted offers on their listing. It must touch **all four tables in a single atomic unit** — either all changes commit or none do.
 
-![Transaction Steps](./module_a_accept_offer_flow.png)
+![Transaction Steps](./assets/module_a_accept_offer_flow.png)
 
 ### The Five Steps
 
@@ -615,13 +615,13 @@ After `recover_into()`:
 
 ### 10.1 System Architecture
 
-![System Architecture](./module_a_architecture.png)
+![System Architecture](./assets/module_a_architecture.png)
 
 The diagram shows how the five layers relate: Application → DatabaseManager → (TransactionManager + WAL) → Table → BPlusTree. The RecoveryManager sits beside the Table layer and is invoked at startup to replay the WAL.
 
 ### 10.2 WAL Transaction Lifecycle Flowchart
 
-![WAL Transaction Lifecycle](./module_a_wal_flow.png)
+![WAL Transaction Lifecycle](./assets/module_a_wal_flow.png)
 
 The flowchart shows the complete write path for a single transaction. Key observations:
 
@@ -632,7 +632,7 @@ The flowchart shows the complete write path for a single transaction. Key observ
 
 ### 10.3 Crash Recovery: REDO + UNDO
 
-![Recovery Flow](./module_a_recovery_flow.png)
+![Recovery Flow](./assets/module_a_recovery_flow.png)
 
 The three-phase recovery process:
 
@@ -644,7 +644,7 @@ The three-phase recovery process:
 
 ### 10.4 `accept_offer_atomic` Transaction Steps
 
-![Accept Offer Flow](./module_a_accept_offer_flow.png)
+![Accept Offer Flow](./assets/module_a_accept_offer_flow.png)
 
 The five-step workflow spanning all four tables. Crash injection is possible at any step boundary. Any exception triggers an automatic reverse-order ROLLBACK before the lock is released.
 
