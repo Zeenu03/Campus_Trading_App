@@ -16,16 +16,58 @@ Run from anywhere:
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ASSIGNMENT_3 = Path(__file__).resolve().parents[1]
+ASSIGNMENT_3 = Path(__file__).resolve().parents[2]   # B+tree/ -> Module_B/ -> Assignment_3/
 MODULE_A = ASSIGNMENT_3 / "Module_A"
-ARTIFACTS = ASSIGNMENT_3 / "artifacts"
+ARTIFACTS = Path(__file__).resolve().parent / "artifacts"  # Module_B/B+tree/artifacts/
 STRESS = MODULE_A / "scripts" / "stress_driver.py"
-PYTHON = sys.executable
+
+
+def _find_python() -> str:
+    """Return the path to a Python 3.10+ interpreter.
+
+    The database package uses ``X | Y`` union-type syntax that requires
+    Python 3.10+.  If the current interpreter is older, search PATH and
+    common Homebrew locations for a compatible version.
+    """
+    if sys.version_info >= (3, 10):
+        return sys.executable
+
+    # Preferred candidates in version order
+    candidates = [
+        "python3.13", "python3.12", "python3.11", "python3.10",
+        "/opt/homebrew/bin/python3.13",
+        "/opt/homebrew/bin/python3.12",
+        "/opt/homebrew/bin/python3.11",
+        "/opt/homebrew/bin/python3.10",
+        "/usr/local/bin/python3.13",
+        "/usr/local/bin/python3.12",
+        "/usr/local/bin/python3.11",
+        "/usr/local/bin/python3.10",
+    ]
+    for name in candidates:
+        path = shutil.which(name) or (name if Path(name).is_file() else None)
+        if path:
+            print(
+                f"Note: current interpreter is Python {sys.version.split()[0]} "
+                f"(< 3.10). Using {path} for stress driver subprocess.",
+                file=sys.stderr,
+            )
+            return path
+
+    raise RuntimeError(
+        f"Python 3.10+ is required by the database package but the current "
+        f"interpreter is {sys.executable} ({sys.version.split()[0]}). "
+        "Install Python 3.10+ or run this script with it directly."
+    )
+
+
+PYTHON = _find_python()
 
 
 def _run_scenario(args: list[str]) -> dict:
@@ -85,6 +127,22 @@ def main() -> int:
             "name": "stress_bulk_2500_ops",
             "description": "Extended load: 2500 operations for robustness under load reporting.",
             "args": ["--scenario", "stress_bulk", "--waves", "125", "--threads", "20"],
+        },
+        {
+            "name": "consistency_check",
+            "description": (
+                "Race then full referential-integrity check across all four tables "
+                "(G3: Transaction↔Offer, Transaction↔Listing, AgreedPrice match, no duplicate commits)."
+            ),
+            "args": ["--scenario", "consistency_check", "--threads", "10"],
+        },
+        {
+            "name": "mixed_concurrent_failure",
+            "description": (
+                "Half threads compete normally, half have injected mid-transaction failures. "
+                "Verifies exactly one winner and no partial state from failing threads (G4)."
+            ),
+            "args": ["--scenario", "mixed_concurrent_failure", "--threads", "10", "--iterations", "8"],
         },
     ]
 

@@ -171,3 +171,207 @@ class StressEngine:
         summary = rm.recover_into(new_dbm)
         self.dbm = new_dbm
         return summary
+
+    # -----------------------------------------------------------------------
+    # Invariant helpers — used by stress scenarios for deep state checks
+    # -----------------------------------------------------------------------
+
+    def verify_all_rolled_back(self, initial_counts: Dict[str, int]) -> Dict[str, Any]:
+        """Verify that all failed transactions were fully rolled back.
+
+        Checks four things:
+        1. All Offer rows still have OfferStatus == "Submitted" — none should be
+           stuck in "Accepted" or "Declined" from a partial (rolled-back) transaction.
+        2. All Listing rows still have Status == "Listed" — none wrongly "Sold".
+        3. Transaction row count <= initial count (no committed inserts snuck in).
+        4. Notification row count <= initial count (same).
+
+        Returns a dict with per-check booleans and a top-level ``clean`` bool.
+        """
+        assert self.dbm is not None, "Call bootstrap() first"
+        db = self.profile.db_name
+
+        offer_t,   _ = self.dbm.get_table(db, "Offer")
+        listing_t, _ = self.dbm.get_table(db, "Listing")
+
+        stuck_offers: List[Dict[str, Any]] = []
+        if offer_t:
+            for key, row in offer_t.get_all():
+                status = row.get("OfferStatus", "")
+                if status != "Submitted":
+                    stuck_offers.append({"offer_id": key, "status": status})
+
+        stuck_listings: List[Dict[str, Any]] = []
+        if listing_t:
+            for key, row in listing_t.get_all():
+                status = row.get("Status", "")
+                if status != "Listed":
+                    stuck_listings.append({"listing_id": key, "status": status})
+
+        final_counts = self.table_row_counts()
+        txn_ok   = final_counts["Transaction"]   <= initial_counts["Transaction"]
+        notif_ok = final_counts["Notification"]  <= initial_counts["Notification"]
+
+        return {
+            "stuck_offers":            stuck_offers,
+            "stuck_listings":          stuck_listings,
+            "offer_statuses_clean":    len(stuck_offers) == 0,
+            "listing_statuses_clean":  len(stuck_listings) == 0,
+            "transaction_count_ok":    txn_ok,
+            "notification_count_ok":   notif_ok,
+            "clean": (
+                len(stuck_offers) == 0
+                and len(stuck_listings) == 0
+                and txn_ok
+                and notif_ok
+            ),
+        }
+
+    def assert_race_invariants(self, threads: int) -> Dict[str, Any]:
+        """Deep state check after a concurrent race on the same listing.
+
+        After N threads compete to accept different offers on one listing,
+        verifies:
+        - Exactly 1 Offer is "Accepted".
+        - Exactly N-1 Offers are "Declined".
+        - Exactly 1 Listing has Status "Sold".
+        - Exactly 1 Transaction has Status "Completed".
+        - The Accepted Offer's primary key matches the Completed Transaction's
+          OfferID field (cross-table referential integrity between Offer and
+          Transaction).
+
+        Works for both pure-race (all threads try to succeed) and mixed
+        scenarios (some threads have fail_after_step), because a failing thread
+        either rolls back cleanly before the winner runs, or fails validation
+        after the winner has already committed.
+        """
+        assert self.dbm is not None, "Call bootstrap() first"
+        db = self.profile.db_name
+
+        offer_t,   _ = self.dbm.get_table(db, "Offer")
+        listing_t, _ = self.dbm.get_table(db, "Listing")
+        txn_t,     _ = self.dbm.get_table(db, "Transaction")
+
+        accepted_offers = [
+            (k, r) for k, r in (offer_t.get_all() if offer_t else [])
+            if r.get("OfferStatus") == "Accepted"
+        ]
+        declined_offers = [
+            (k, r) for k, r in (offer_t.get_all() if offer_t else [])
+            if r.get("OfferStatus") == "Declined"
+        ]
+        sold_listings = [
+            (k, r) for k, r in (listing_t.get_all() if listing_t else [])
+            if r.get("Status") == "Sold"
+        ]
+        completed_txns = [
+            (k, r) for k, r in (txn_t.get_all() if txn_t else [])
+            if r.get("Status") == "Completed"
+        ]
+
+        offer_txn_match = False
+        if len(accepted_offers) == 1 and len(completed_txns) == 1:
+            accepted_offer_id       = accepted_offers[0][0]
+            completed_txn_offer_id  = completed_txns[0][1].get("OfferID")
+            offer_txn_match = (accepted_offer_id == completed_txn_offer_id)
+
+        exactly_one_accepted  = len(accepted_offers) == 1
+        exactly_one_sold      = len(sold_listings)   == 1
+        exactly_one_completed = len(completed_txns)  == 1
+        declined_count_ok     = len(declined_offers) == threads - 1
+
+        return {
+            "accepted_offer_count":        len(accepted_offers),
+            "declined_offer_count":        len(declined_offers),
+            "sold_listing_count":          len(sold_listings),
+            "completed_transaction_count": len(completed_txns),
+            "offer_txn_referential_match": offer_txn_match,
+            "exactly_one_accepted":        exactly_one_accepted,
+            "exactly_one_sold_listing":    exactly_one_sold,
+            "exactly_one_completed_txn":   exactly_one_completed,
+            "declined_count_correct":      declined_count_ok,
+            "all_invariants_pass": (
+                exactly_one_accepted
+                and exactly_one_sold
+                and exactly_one_completed
+                and offer_txn_match
+                and declined_count_ok
+            ),
+        }
+
+    def check_referential_integrity(self) -> Dict[str, Any]:
+        """Verify cross-table referential integrity across all four campus tables.
+
+        For every Transaction row, checks:
+        - OfferID exists in the Offer table.
+        - ListingID exists in the Listing table.
+        - SellerID matches the referenced Listing's SellerID.
+        - For "Completed" Transactions, AgreedPrice matches the Offer's AgreedPrice.
+
+        Also checks that no two "Completed" Transactions share the same OfferID
+        (duplicate commit detection).
+
+        Returns a dict with a ``violations`` list (empty = clean) and a
+        ``referential_integrity_ok`` bool.
+        """
+        assert self.dbm is not None, "Call bootstrap() first"
+        db = self.profile.db_name
+
+        offer_t,   _ = self.dbm.get_table(db, "Offer")
+        listing_t, _ = self.dbm.get_table(db, "Listing")
+        txn_t,     _ = self.dbm.get_table(db, "Transaction")
+
+        violations: List[str] = []
+
+        if txn_t and offer_t and listing_t:
+            offer_keys   = {k for k, _ in offer_t.get_all()}
+            listing_keys = {k for k, _ in listing_t.get_all()}
+            completed_offer_ids: List[Any] = []
+
+            for txn_key, txn_row in txn_t.get_all():
+                offer_id   = txn_row.get("OfferID")
+                listing_id = txn_row.get("ListingID")
+                seller_id  = txn_row.get("SellerID")
+
+                if offer_id not in offer_keys:
+                    violations.append(
+                        f"Transaction {txn_key}: OfferID {offer_id} "
+                        f"not found in Offer table"
+                    )
+                if listing_id not in listing_keys:
+                    violations.append(
+                        f"Transaction {txn_key}: ListingID {listing_id} "
+                        f"not found in Listing table"
+                    )
+                if listing_id in listing_keys:
+                    listing_row = listing_t.get(listing_id)
+                    if listing_row and listing_row.get("SellerID") != seller_id:
+                        violations.append(
+                            f"Transaction {txn_key}: SellerID {seller_id} does not "
+                            f"match Listing {listing_id} SellerID "
+                            f"{listing_row.get('SellerID')}"
+                        )
+
+                if txn_row.get("Status") == "Completed" and offer_id in offer_keys:
+                    offer_row = offer_t.get(offer_id)
+                    if offer_row:
+                        txn_price   = txn_row.get("AgreedPrice")
+                        offer_price = offer_row.get("AgreedPrice")
+                        if txn_price != offer_price:
+                            violations.append(
+                                f"Transaction {txn_key}: AgreedPrice {txn_price} "
+                                f"!= Offer {offer_id} AgreedPrice {offer_price}"
+                            )
+                    completed_offer_ids.append(offer_id)
+
+            if len(completed_offer_ids) != len(set(completed_offer_ids)):
+                violations.append(
+                    "Multiple Completed transactions share the same OfferID "
+                    "— duplicate commit detected"
+                )
+
+        return {
+            "violations":              violations,
+            "violation_count":         len(violations),
+            "referential_integrity_ok": len(violations) == 0,
+        }
