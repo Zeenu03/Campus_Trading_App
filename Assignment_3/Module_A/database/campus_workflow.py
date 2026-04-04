@@ -47,6 +47,7 @@ def _build_transaction_record(
     buyer_id: int,
     offer_id: int,
     agreed_price: float,
+    status: str = "Declined",
 ) -> Dict[str, Any]:
     record = _init_record(tx_table)
     for col, val in (
@@ -56,7 +57,7 @@ def _build_transaction_record(
         ("BuyerID", buyer_id),
         ("OfferID", offer_id),
         ("AgreedPrice", float(agreed_price)),
-        ("Status", "Scheduled"),
+        ("Status", status),
     ):
         if col in record:
             record[col] = val
@@ -162,6 +163,7 @@ def _accept_offer_inner(
     """Inner implementation — called while the serial lock is held."""
     tx_id = dbm.begin_transaction()
     try:
+        # --- Get tables ---
         offer_table, msg = dbm.get_table(db_name, "Offer")
         if offer_table is None:
             raise RuntimeError(msg)
@@ -264,7 +266,7 @@ def _accept_offer_inner(
             tx_id, db_name, "Transaction",
             _build_transaction_record(
                 transaction_table, accepted_txn_id,
-                listing_id, acting_seller_id, buyer_id, offer_id, agreed,
+                listing_id, acting_seller_id, buyer_id, offer_id, agreed, "Completed",
             ),
         )
         if not ok:
@@ -282,7 +284,7 @@ def _accept_offer_inner(
                     tx_id, db_name, "Transaction",
                     _build_transaction_record(
                         transaction_table, next_txn_id,
-                        listing_id, acting_seller_id, other_buyer_id, other_offer_id, other_price,
+                        listing_id, acting_seller_id, other_buyer_id, other_offer_id, other_price, "Declined",
                     ),
                 )
                 if not ok:
