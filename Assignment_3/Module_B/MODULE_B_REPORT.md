@@ -52,90 +52,69 @@ The Campus Trading Application is a real-world marketplace built for students to
 ### Overall suite workflow
 
 ```mermaid
-flowchart TD
-    A([Start run_stress.py]) --> B[Start MySQL\ndocker compose up -d]
-    B --> C{MySQL healthy?}
-    C -- No / timeout --> X1([Abort])
-    C -- Yes --> D[Start Go backend\ngo run .]
-    D --> E{Backend responding?}
-    E -- No / timeout --> X2([Abort])
-    E -- Yes --> F[Seed test data\n5 sellers · 25 buyers\n10 listings · 1 race listing\n10 race offers]
-    F --> G[Scenario 1\nconcurrent_users]
-    G --> H[Scenario 2\noffer_race]
-    H --> I[Scenario 3\nfailure_simulation]
-    I --> J[Scenario 4\nstress_bulk]
-    J --> K[Generate charts\nlatency · error rate\nthroughput · container load]
-    K --> L[Write results.json\n& report artifacts]
-    L --> M([Done])
-
-    style G fill:#d4f1d4
-    style H fill:#d4f1d4
-    style I fill:#d4f1d4
-    style J fill:#d4f1d4
+flowchart LR
+    A([Start]) --> B[MySQL\ndocker up]
+    B --> C{Healthy?}
+    C -- No --> X1([Abort])
+    C -- Yes --> D[Go backend\ngo run .]
+    D --> E{Ready?}
+    E -- No --> X2([Abort])
+    E -- Yes --> F[Seed data\n5 sellers / 25 buyers\n10 listings]
+    F --> G[S1 concurrent_users]
+    G --> H[S2 offer_race]
+    H --> I[S3 failure_simulation]
+    I --> J[S4 stress_bulk]
+    J --> K[Charts + results.json]
+    K --> L([Done])
+    style G fill:#d4f1d4,stroke:#4a9
+    style H fill:#d4f1d4,stroke:#4a9
+    style I fill:#d4f1d4,stroke:#4a9
+    style J fill:#d4f1d4,stroke:#4a9
 ```
 
 ### Data model used in tests
 
 ```mermaid
 erDiagram
-    Member {
-        int MemberID PK
-        string Name
-        string Email
-    }
-    Listing {
-        int ListingID PK
-        int SellerID FK
-        string Status
-        float AskingPrice
-    }
-    Offer {
-        int OfferID PK
-        int ListingID FK
-        int BuyerID FK
-        string OfferStatus
-        float OfferedPrice
-    }
-    Transaction {
-        int TransactionID PK
-        int ListingID FK
-        int OfferID FK
-        float AgreedPrice
-    }
-    Notification {
-        int NotificationID PK
-        int RecipientID FK
-    }
-
     Member ||--o{ Listing : sells
     Member ||--o{ Offer : makes
     Listing ||--o{ Offer : receives
     Offer ||--o| Transaction : produces
     Member ||--o{ Notification : receives
+
+    Member { int MemberID PK }
+    Listing { int ListingID PK }
+    Offer { string OfferStatus }
+    Transaction { float AgreedPrice }
+    Notification { string Type }
 ```
 
 ### Helper module structure
 
 ```mermaid
-graph LR
-    RS[run_stress.py\norchestrator]
-    AC[api_client.py\nHTTP wrapper]
-    DB[db_verifier.py\nMySQL direct checks]
-    DM[docker_monitor.py\nCPU/mem polling]
-    MT[metrics.py\nlatency tracking]
-    SR[result.py\nScenarioResult]
+graph TB
+    RS[run_stress.py]
+    RS --> CU[concurrent_users]
+    RS --> OR[offer_race]
+    RS --> FS[failure_simulation]
+    RS --> SB[stress_bulk]
 
-    CU[concurrent_users.py]
-    OR[offer_race.py]
-    FS[failure_simulation.py]
-    SB[stress_bulk.py]
+    CU --> AC[api_client]
+    OR --> AC
+    FS --> AC
+    SB --> AC
 
-    RS --> CU & OR & FS & SB
-    CU & OR & FS & SB --> AC
-    CU & OR & FS & SB --> DB
-    CU & OR & FS & SB --> MT
-    SB --> DM
-    CU & OR & FS & SB --> SR
+    CU --> MT[metrics]
+    OR --> MT
+    FS --> MT
+    SB --> MT
+
+    CU --> DB[db_verifier]
+    OR --> DB
+    FS --> DB
+    SB --> DB
+
+    SB --> DM[docker_monitor]
 ```
 
 ---
@@ -150,36 +129,28 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    participant T as Test Driver
-    participant B1 as Thread 1–5<br/>(Readers)
-    participant B2 as Thread 6–10<br/>(Listers)
-    participant B3 as Thread 11–15<br/>(Offerers)
-    participant B4 as Thread 16–20<br/>(Notifiers)
-    participant API as Go Backend
+    participant T as Driver
+    participant R as Readers x5
+    participant L as Listers x5
+    participant O as Offerers x5
+    participant N as Notifiers x5
+    participant API as Backend
     participant DB as MySQL
 
-    T->>B1: start()
-    T->>B2: start()
-    T->>B3: start()
-    T->>B4: start()
-
-    Note over B1,B4: Barrier.wait() — all threads synchronized here
-
-    par simultaneous burst
-        B1->>API: GET /listings (×5 each)
-        B2->>API: POST /listings
-        B3->>API: POST /listings/{id}/offers
-        B4->>API: GET /notifications (×3 each)
+    T->>R: start
+    T->>L: start
+    T->>O: start
+    T->>N: start
+    Note over R,N: Barrier.wait() — all fire simultaneously
+    par
+        R->>API: GET /listings x5
+        L->>API: POST /listings
+        O->>API: POST /offers
+        N->>API: GET /notifications x3
     end
-
     API->>DB: concurrent queries
-    DB-->>API: results (InnoDB row locks)
-    API-->>B1: 200 OK
-    API-->>B2: 201 Created
-    API-->>B3: 201 Created
-    API-->>B4: 200 OK
-
-    T->>T: assert success_rate ≥ 90%\nassert server_5xx == 0
+    DB-->>API: InnoDB row locks resolved
+    Note over T: success_rate=98.6%, server_5xx=0
 ```
 
 ### Thread role assignment
@@ -229,28 +200,24 @@ This endpoint finalises a sale. When 10 buyer sessions each submit an offer on t
 
 ```mermaid
 sequenceDiagram
-    participant T1 as Thread 1<br/>accepts offer A
-    participant T2 as Thread 2<br/>accepts offer B
+    participant T1 as Thread 1
+    participant T2 as Thread 2
     participant DB as MySQL
 
-    Note over T1,T2: Both outside the transaction
-    T1->>DB: SELECT OfferStatus WHERE OfferID=A → "Submitted" ✓
-    T2->>DB: SELECT OfferStatus WHERE OfferID=B → "Submitted" ✓
-
-    Note over T1,T2: Race window — both pass the guard check
-
+    Note over T1,T2: Status check OUTSIDE transaction (no lock)
+    T1->>DB: SELECT OfferStatus for offer A
+    DB-->>T1: Submitted
+    T2->>DB: SELECT OfferStatus for offer B
+    DB-->>T2: Submitted
+    Note over T1,T2: Both pass guard — race window open
     T1->>DB: BEGIN TX
     T2->>DB: BEGIN TX
-
-    T1->>DB: UPDATE Offer SET Accepted WHERE OfferID=A ← no status guard
-    T2->>DB: UPDATE Offer SET Accepted WHERE OfferID=B ← no status guard
-
-    Note over DB: Both UPDATEs succeed — 2 accepted offers!
-
-    T1->>DB: INSERT Transaction × 10 (A + 9 declined)
-    T2->>DB: INSERT Transaction × 10 (B + 9 declined)
-
-    Note over DB: 100 Transaction rows instead of 10 ← race detected
+    T1->>DB: UPDATE Offer A SET Accepted
+    T2->>DB: UPDATE Offer B SET Accepted
+    Note over DB: 2 offers Accepted — RACE CONDITION
+    T1->>DB: INSERT 10 Transaction rows
+    T2->>DB: INSERT 10 Transaction rows
+    Note over DB: 100 Transaction rows, expected 10
 ```
 
 **Observed before fix:** Type A (2 accepted offers) or Type B (100 Transaction rows, 10× expected) — depending on timing.
@@ -259,31 +226,25 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant T1 as Thread 1<br/>accepts offer A
-    participant T2 as Thread 2<br/>accepts offer B
+    participant T1 as Thread 1
+    participant T2 as Thread 2
     participant DB as MySQL InnoDB
 
     T1->>DB: BEGIN TX
     T2->>DB: BEGIN TX
-
-    T1->>DB: SELECT Status FROM Listing\nWHERE ListingID=X FOR UPDATE
-    Note over DB: T1 acquires exclusive row lock on Listing X
-
-    T2->>DB: SELECT Status FROM Listing\nWHERE ListingID=X FOR UPDATE
-    Note over DB: T2 BLOCKS — waiting for T1's lock
-
-    T1->>DB: Status = "Listed" ✓ — proceed
-    T1->>DB: UPDATE Offer SET Accepted WHERE OfferID=A AND Status='Submitted'
-    T1->>DB: UPDATE other offers → Declined
-    T1->>DB: UPDATE Listing SET Status='Sold'
-    T1->>DB: INSERT Transaction × 10
-    T1->>DB: COMMIT — releases lock on Listing X
-
-    DB-->>T2: Lock released — reads Status = "Sold"
-    T2->>DB: Status ≠ "Listed" → ROLLBACK
-    DB-->>T2: 409 "listing is no longer available for offers"
-
-    Note over T1,T2: Threads 3–10: same as T2 — all get 409
+    T1->>DB: SELECT Status FROM Listing FOR UPDATE
+    Note over DB: T1 holds exclusive row lock
+    T2->>DB: SELECT Status FROM Listing FOR UPDATE
+    Note over DB: T2 BLOCKS — waiting for T1 lock
+    T1->>DB: Status=Listed, UPDATE Offer A SET Accepted
+    T1->>DB: UPDATE others SET Declined
+    T1->>DB: UPDATE Listing SET Sold
+    T1->>DB: INSERT 10 Transactions
+    T1->>DB: COMMIT — lock released
+    Note over T2: Unblocked, reads Status=Sold
+    T2->>DB: ROLLBACK
+    DB-->>T2: 409 listing no longer available
+    Note over T1,T2: Threads 3-10 also get 409
 ```
 
 ### Results
@@ -312,51 +273,35 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph Phase1["Phase 1 — Concurrent writes (staggered start)"]
-        direction LR
-        W0[Thread 0\nsubmit_offer at t=0ms]
-        W1[Thread 1\nsubmit_offer at t=80ms]
-        W2[Thread 2\nsubmit_offer at t=160ms]
-        WN[Thread 9\nsubmit_offer at t=720ms]
+    subgraph P1["Phase 1 — Staggered writes"]
+        W0[T0: 0ms] --> W1[T1: 80ms] --> W2[T2: 160ms] --> W3[T3: 240ms] --> WN[...T9: 720ms]
     end
-
-    subgraph Phase2["Phase 2 — Kill MySQL mid-way"]
-        K[docker stop campus_a3_mysql\nat t ≈ 360ms]
+    subgraph P2["Phase 2 — Failure"]
+        K[docker stop\nat t=360ms]
     end
-
-    subgraph Phase3["Phase 3 — Recovery and integrity check"]
-        direction LR
-        R1[docker start campus_a3_mysql]
-        R2[Wait for MySQL healthcheck]
-        R3[InnoDB crash recovery\nrolls back in-flight TX]
-        R4[DBVerifier.full_integrity_check]
+    subgraph P3["Phase 3 — Recovery"]
+        R1[docker start] --> R2[healthcheck] --> R3[InnoDB WAL\nrollback] --> R4[integrity check]
     end
-
-    Phase1 --> Phase2 --> Phase3
+    P1 --> P2 --> P3
+    style K fill:#ff6b6b,stroke:#c00
 ```
 
 ### Timeline of events
 
 ```mermaid
-gantt
-    dateFormat X
-    axisFormat %Lms
-    section Threads
-    Thread 0 (committed)   :done,  0,  100
-    Thread 1 (committed)   :done,  80, 180
-    Thread 2 (committed)   :done,  160, 260
-    Thread 3 (committed)   :done,  240, 340
-    Thread 4 (aborted)     :crit,  320, 420
-    Thread 5 (aborted)     :crit,  400, 500
-    Thread 6 (aborted)     :crit,  480, 580
-    Thread 7 (aborted)     :crit,  560, 660
-    Thread 8 (aborted)     :crit,  640, 740
-    Thread 9 (aborted)     :crit,  720, 820
-    section MySQL
-    Kill signal            :milestone, 360, 361
-    Container stopped      :crit, 360, 500
-    Container restarted    :active, 500, 600
-    InnoDB recovery        :active, 600, 700
+sequenceDiagram
+    participant T03 as Threads 0-3
+    participant DB as MySQL
+    participant T49 as Threads 4-9
+
+    T03->>DB: submit_offer (staggered 0-240ms)
+    DB-->>T03: 201 Created x4 (committed)
+    Note over DB: docker stop at t=360ms
+    T49--xDB: submit_offer (connection lost)
+    Note over T49: 6 requests aborted
+    Note over DB: docker start — InnoDB WAL recovery
+    DB->>DB: rollback 6 in-flight TX
+    Note over DB: full_integrity_check: all_clean = True
 ```
 
 ### Integrity checks performed post-restart
@@ -389,29 +334,35 @@ gantt
 ### Method: 1 000 mixed operations, 20 concurrent workers
 
 ```mermaid
-flowchart TD
-    WQ[Work Queue\n1 000 tasks]
+flowchart LR
+    WQ[1000 tasks\nin queue]
 
-    subgraph Workers["20 Concurrent Worker Threads"]
-        WK1[Worker 1]
-        WK2[Worker 2]
-        WKN[Worker 20]
+    subgraph Workers["20 Worker Threads"]
+        W1[Worker 1]
+        W2[Worker 2]
+        W20[Worker 20]
     end
 
-    WQ --> WK1 & WK2 & WKN
+    WQ --> W1
+    WQ --> W2
+    WQ --> W20
 
-    subgraph API["Go Backend / MySQL"]
-        R[60% Reads\nGET listings\nGET notifications\nGET transactions\nGET listing detail]
-        W[40% Writes\nPOST submit_offer\nON DUPLICATE KEY UPDATE]
+    subgraph Ops["Operations"]
+        R["Reads 60%\nGET /listings\nGET /notifications\nGET /transactions"]
+        W["Writes 40%\nPOST /offers"]
     end
 
-    WK1 & WK2 & WKN --> R & W
+    W1 --> R
+    W1 --> W
+    W2 --> R
+    W2 --> W
+    W20 --> R
+    W20 --> W
 
-    DM[DockerMonitor\npoll CPU+mem every 1s]
-    DB[DBVerifier\nfull integrity check after run]
-
-    API --> DM
-    API --> DB
+    R --> API[Go Backend + MySQL]
+    W --> API
+    API --> DM[DockerMonitor\nCPU + mem]
+    API --> VER[DBVerifier\nintegrity check]
 ```
 
 **Operation mix:**
@@ -440,13 +391,17 @@ flowchart TD
 
 **Per-endpoint latency breakdown:**
 
-| Endpoint | Avg ms | p99 ms | Max ms |
-|----------|--------|--------|--------|
-| `GET /notifications` | 24.1 | 78.5 | 148.4 |
-| `GET /transactions` | 24.9 | 74.4 | 137.2 |
-| `GET /listings` | 24.0 | 67.8 | 110.8 |
-| `GET /listing/{id}` | 32.0 | 150.6 | 172.6 |
-| `POST /offers` | **65.1** | **118.3** | **201.1** |
+| Endpoint | Min ms | Avg ms | p99 ms | Max ms |
+|----------|--------|--------|--------|--------|
+| `GET /notifications` | 5.6 | 24.1 | 78.5 | 148.4 |
+| `GET /transactions` | 6.8 | 24.9 | 74.4 | 137.2 |
+| `GET /listings` | 7.7 | 24.0 | 67.8 | 110.8 |
+| `GET /listing/{id}` | 6.4 | 32.0 | 150.6 | 172.6 |
+| `POST /offers` | 6.8 | **65.1** | **118.3** | **201.1** |
+
+![Per-endpoint latency — stress_bulk](MySQL/artifacts/charts/stress_endpoint_latency.png)
+
+> All read endpoints cluster between **24–32 ms avg** with low minimum latencies (~6–8 ms), showing MySQL's InnoDB buffer pool is serving most reads from cache. `POST /offers` is the clear outlier at **65 ms avg / 118 ms p99** because each submission acquires an InnoDB row lock, performs a duplicate-key check, and inserts a `Notification` row — all within a single transaction. The wide min–max spread (7 ms → 201 ms) for writes reflects variable lock-wait time under 20 concurrent workers.
 
 ### Container load under stress
 
@@ -474,21 +429,22 @@ flowchart TD
 
 ```mermaid
 mindmap
-  root((ACID\nVerified))
+  root((ACID))
     Atomicity
-      AcceptOffer: 10 rows\ninserted or 0
-      Failure scenario:\n4 committed · 6 aborted\nno partial rows
+      AcceptOffer 10 rows or 0
+      4 committed 6 aborted
+      Zero partial rows
     Consistency
-      All business rules\nenforced under load\nmax 2 listings cap\nnot violated by DB
-      Referential integrity\n0 orphan transactions
-      0 sold-without-\ntransaction violations
+      Business rules enforced under load
+      0 orphan transactions
+      0 sold without transaction
     Isolation
-      Barrier-sync burst:\n98.6% success\n0 server errors
-      Listing row lock\nserialises concurrent\nAcceptOffer calls
-      9 of 10 race threads\nget 409 before touching\nany data
+      98.6% success under burst
+      SELECT FOR UPDATE serialises AcceptOffer
+      9 of 10 race threads get 409
     Durability
-      4 pre-kill offers\nsurvived restart intact
-      InnoDB WAL rolled\nback 6 in-flight TX\nautomatically
+      4 pre-kill offers survived restart
+      InnoDB WAL auto-rollback 6 TX
 ```
 
 | ACID Property | How Tested | Evidence | Result |
