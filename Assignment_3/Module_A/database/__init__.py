@@ -19,7 +19,6 @@ Display helpers for notebooks and terminals:
 
 from .node import Node, LeafNode, InternalNode
 from .bplustree import BPlusTree
-from .bruteforce import BruteForceDB
 from .table import Table
 from .db_manager import DatabaseManager
 from .wal import WriteAheadLog
