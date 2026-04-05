@@ -1,27 +1,70 @@
 # Assignment 3 — Transaction Management, Concurrency, and ACID Validation
 
-This folder contains **Module A** (custom B+ Tree transaction engine + WAL recovery) and **Module B** (multi-threaded stress experiments), plus generated evidence for the written report and video.
+This folder contains the Assignment 3 deliverables for:
+
+- **Module A:** custom B+ Tree transaction engine, WAL logging, and crash recovery
+- **Module B:** concurrent and stress-testing workflows (B+ Tree engine and MySQL backend tracks)
+
+## Structure at a glance
+
+| Component | Purpose | Primary doc |
+|---|---|---|
+| `Module_A/` | ACID transactions, WAL, REDO/UNDO recovery, stress driver | [`Module_A/README.md`](Module_A/README.md) |
+| `Module_B/B+tree/` | Stress experiments against custom Module A engine | [`Module_B/B+tree/README.md`](Module_B/B+tree/README.md) |
+| `Module_B/MySQL/` | Stress suite against Go + MySQL stack | [`Module_B/MySQL/RESULTS_GUIDE.md`](Module_B/MySQL/RESULTS_GUIDE.md) |
 
 ## Quick links
 
 | Deliverable | Location |
-|-------------|----------|
-| **Combined report** (spec §6 + §8) | [`ASSIGNMENT_3_COMBINED_REPORT.md`](ASSIGNMENT_3_COMBINED_REPORT.md) |
-| Module A implementation | [`Module_A/`](Module_A/) |
-| Module A deep-dive write-up | [`Module_A/ASSIGNMENT_3_IMPLEMENTATION_EXPLAINED.md`](Module_A/ASSIGNMENT_3_IMPLEMENTATION_EXPLAINED.md) |
-| Module B experiment runner | [`Module_B/run_experiments.py`](Module_B/run_experiments.py) |
-| Module B JSON results | [`artifacts/module_b_results.json`](artifacts/module_b_results.json) |
-| Module A test + demo summary | [`Module_A/artifacts/phase6_summary.json`](Module_A/artifacts/phase6_summary.json) |
+|---|---|
 | Assignment specification | [`ASSIGNMENT_SPECIFICATION.md`](ASSIGNMENT_SPECIFICATION.md) |
+| Final report PDF | [`FinalReport.pdf`](FinalReport.pdf) |
+| Assignment submission PDF | [`Track1_Assignment3.pdf`](Track1_Assignment3.pdf) |
+| Module A guide | [`Module_A/README.md`](Module_A/README.md) |
+| Module A detailed report | [`Module_A/MODULE_A_REPORT.md`](Module_A/MODULE_A_REPORT.md) |
+| Module A notebook demo | [`Module_A/acid_properties_demo.ipynb`](Module_A/acid_properties_demo.ipynb) |
+| Module B report | [`Module_B/MODULE_B_REPORT.md`](Module_B/MODULE_B_REPORT.md) |
+| Module B (B+tree) runner | [`Module_B/B+tree/run_experiments.py`](Module_B/B+tree/run_experiments.py) |
+| Module B (B+tree) results guide | [`Module_B/B+tree/RESULTS_GUIDE.md`](Module_B/B+tree/RESULTS_GUIDE.md) |
+| Module B (MySQL) runner | [`Module_B/MySQL/run_stress.py`](Module_B/MySQL/run_stress.py) |
+| Module B (MySQL) results guide | [`Module_B/MySQL/RESULTS_GUIDE.md`](Module_B/MySQL/RESULTS_GUIDE.md) |
 
-## Regenerate all evidence + report
+## How to run
 
-From **`Assignment_3`**:
+### Module A
+
+From `Assignment_3/Module_A`:
 
 ```bash
-python3 scripts/build_assignment3_evidence.py
+python -m pip install -r requirements.txt
+python scripts/stress_driver.py --scenario mixed_concurrent_failure --threads 10 --iterations 5
 ```
 
-This runs the full Module A unittest suite and phase-6 demos (including explicit `BEGIN`/`COMMIT` and `BEGIN`/`ROLLBACK`), executes the Module B batch (races, load, failures, crash recovery, **1000+** and **2500+** operation stress runs), and rewrites `ASSIGNMENT_3_COMBINED_REPORT.md`.
+### Module B — B+tree track
 
-**Python 3.10+** required (3.13 recommended).
+From `Assignment_3`:
+
+```bash
+python Module_B/B+tree/run_experiments.py
+```
+
+### Module B — MySQL track
+
+From `Assignment_3/Module_B/MySQL`:
+
+```bash
+python -m pip install -r requirements.txt
+python run_stress.py
+```
+
+## Output locations
+
+- Module A generated WAL/demo logs: `Module_A/artifacts/`
+- Module B B+tree experiment outputs: `Module_B/B+tree/artifacts/`
+- Module B MySQL experiment outputs and charts: `Module_B/MySQL/artifacts/`
+
+## Requirements
+
+- Python 3.10+ (3.13 recommended)
+- Docker Desktop (required for MySQL track)
+- Go 1.21+ (required for MySQL track backend integration)
