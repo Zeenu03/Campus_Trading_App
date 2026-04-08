@@ -455,7 +455,12 @@ export default function ListingDetail() {
           {/* Listing info card */}
           <div className="card space-y-4">
             <div className="flex items-start justify-between gap-2">
-              <h1 className="text-2xl font-bold text-gray-900">{listing.title}</h1>
+              <div className="flex items-center gap-3 min-w-0">
+                <h1 className="text-2xl font-bold text-gray-900 truncate">{listing.title}</h1>
+                <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                  #{listing.listing_id}
+                </span>
+              </div>
               <span className={STATUS_COLORS[listing.status] || 'badge-gray'}>{listing.status}</span>
             </div>
 
