@@ -1,7 +1,7 @@
 # Campus Trading App - Assignment 4 Sharding Implementation Report
 
 - GitHub repository link: [Campus Trading App](https://github.com/Zeenu03/Campus_Trading_App)
-- Video link: To be added
+- Video link: [Video Demonstration](https://drive.google.com/drive/folders/1l-RayTmUGG57QMmtfaCMXEwNpb5eaTEG?usp=sharing)
 
 ## 1. Shard Key Chosen and Justification
 
