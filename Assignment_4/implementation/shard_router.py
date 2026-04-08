@@ -1,9 +1,3 @@
-"""Modulo-based shard routing for Assignment 4.
-
-This module keeps the routing rule explicit and reusable for the migration,
-verification, and report documentation in Assignment 4.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -42,18 +36,19 @@ class ShardRouter:
 
 
 TABLE_ROUTING = {
+    "Administrator": ("AdminID", "replicate"),
     "Member": ("MemberID", "partition"),
+    "WishRequest": ("WishRequestID", "partition"),
     "Listing": ("ListingID", "partition"),
-    "ListingImage": ("ListingID", "partition"),
-    "Offer": ("ListingID", "partition"),
-    "Transaction": ("ListingID", "partition"),
-    "MessageThread": ("ListingID", "partition"),
-    "Message": ("ThreadID", "partition"),
-    "Notification": ("RecipientID", "partition"),
-    "Watchlist": ("MemberID", "partition"),
-    "WishRequest": ("RequesterID", "partition"),
-    "Report": ("ReporterID", "partition"),
-    "Rating": ("TransactionID", "partition"),
+    "ListingImage": ("ImageID", "partition"),
+    "Offer": ("OfferID", "partition"),
+    "Transaction": ("TransactionID", "partition"),
+    "MessageThread": ("ThreadID", "partition"),
+    "Message": ("MessageID", "partition"),
+    "Notification": ("NotificationID", "partition"),
+    "Watchlist": ("WatchlistID", "partition"),
+    "Report": ("ReportID", "partition"),
+    "Rating": ("RatingID", "partition"),
     "Category": ("CategoryID", "replicate"),
 }
 

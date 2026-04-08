@@ -41,6 +41,18 @@ The source database is `CampusTradingB` and the shard databases are:
    - `pip install -r requirements.txt`
 
 4. Create the three shard databases and shard tables by running [sql/create_shards.sql](sql/create_shards.sql) on the MySQL server.
+
+   ```bash
+   cd Assignment_4
+   mysql -h {IP or localhost} -P 3306 -u root -p CampusTradingB < sql/create_shards.sql
+   ```
+
+   To verify that the shard databases were created, you can run:
+
+   ```bash
+   mysql -h {IP or localhost} -P 3306 -u root -p -e "SHOW DATABASES LIKE 'CampusTradingB_shard_%';"
+   ```
+
 5. Seed or prepare the source database with the desired sample data.
 6. Run the migration script to copy rows into the three shards.
 7. Run the verification script to confirm totals and duplicate checks.

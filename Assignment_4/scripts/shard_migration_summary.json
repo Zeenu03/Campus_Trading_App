@@ -1,0 +1,192 @@
+{
+  "partitioned": {
+    "Member": {
+      "0": 1,
+      "1": 2,
+      "2": 2
+    },
+    "WishRequest": {
+      "0": 4,
+      "1": 5,
+      "2": 5
+    },
+    "Listing": {
+      "0": 41,
+      "1": 42,
+      "2": 42
+    },
+    "ListingImage": {
+      "0": 8,
+      "1": 9,
+      "2": 8
+    },
+    "Offer": {
+      "0": 41,
+      "1": 42,
+      "2": 41
+    },
+    "Transaction": {
+      "0": 40,
+      "1": 41,
+      "2": 40
+    },
+    "MessageThread": {
+      "0": 7,
+      "1": 8,
+      "2": 7
+    },
+    "Message": {
+      "0": 14,
+      "1": 15,
+      "2": 15
+    },
+    "Watchlist": {
+      "0": 8,
+      "1": 8,
+      "2": 8
+    },
+    "Report": {
+      "0": 4,
+      "1": 4,
+      "2": 4
+    },
+    "Rating": {
+      "0": 7,
+      "1": 8,
+      "2": 7
+    },
+    "Notification": {
+      "0": 8,
+      "1": 9,
+      "2": 8
+    }
+  },
+  "replicated": {
+    "Administrator": {
+      "0": 1,
+      "1": 1,
+      "2": 1
+    },
+    "Category": {
+      "0": 15,
+      "1": 15,
+      "2": 15
+    }
+  },
+  "duplicates": {
+    "Member": 0,
+    "WishRequest": 0,
+    "Listing": 0,
+    "ListingImage": 0,
+    "Offer": 0,
+    "Transaction": 0,
+    "MessageThread": 0,
+    "Message": 0,
+    "Watchlist": 0,
+    "Report": 0,
+    "Rating": 0,
+    "Notification": 0,
+    "Administrator": 0,
+    "Category": 0
+  },
+  "row_counts": {
+    "Member": {
+      "source": 5,
+      "shard_0": 1,
+      "shard_1": 2,
+      "shard_2": 2,
+      "total_shards": 5
+    },
+    "WishRequest": {
+      "source": 14,
+      "shard_0": 4,
+      "shard_1": 5,
+      "shard_2": 5,
+      "total_shards": 14
+    },
+    "Listing": {
+      "source": 125,
+      "shard_0": 41,
+      "shard_1": 42,
+      "shard_2": 42,
+      "total_shards": 125
+    },
+    "ListingImage": {
+      "source": 25,
+      "shard_0": 8,
+      "shard_1": 9,
+      "shard_2": 8,
+      "total_shards": 25
+    },
+    "Offer": {
+      "source": 124,
+      "shard_0": 41,
+      "shard_1": 42,
+      "shard_2": 41,
+      "total_shards": 124
+    },
+    "Transaction": {
+      "source": 121,
+      "shard_0": 40,
+      "shard_1": 41,
+      "shard_2": 40,
+      "total_shards": 121
+    },
+    "MessageThread": {
+      "source": 22,
+      "shard_0": 7,
+      "shard_1": 8,
+      "shard_2": 7,
+      "total_shards": 22
+    },
+    "Message": {
+      "source": 44,
+      "shard_0": 14,
+      "shard_1": 15,
+      "shard_2": 15,
+      "total_shards": 44
+    },
+    "Watchlist": {
+      "source": 24,
+      "shard_0": 8,
+      "shard_1": 8,
+      "shard_2": 8,
+      "total_shards": 24
+    },
+    "Report": {
+      "source": 12,
+      "shard_0": 4,
+      "shard_1": 4,
+      "shard_2": 4,
+      "total_shards": 12
+    },
+    "Rating": {
+      "source": 22,
+      "shard_0": 7,
+      "shard_1": 8,
+      "shard_2": 7,
+      "total_shards": 22
+    },
+    "Notification": {
+      "source": 25,
+      "shard_0": 8,
+      "shard_1": 9,
+      "shard_2": 8,
+      "total_shards": 25
+    },
+    "Administrator": {
+      "source": 1,
+      "shard_0": 1,
+      "shard_1": 1,
+      "shard_2": 1,
+      "total_shards": 3
+    },
+    "Category": {
+      "source": 15,
+      "shard_0": 15,
+      "shard_1": 15,
+      "shard_2": 15,
+      "total_shards": 45
+    }
+  }
+}
