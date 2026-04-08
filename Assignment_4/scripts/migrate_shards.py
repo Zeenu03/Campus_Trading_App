@@ -96,9 +96,19 @@ def table_primary_key(table: str) -> str:
     return TABLE_ROUTING[table][0]
 
 
-def ensure_shard_databases(cursor, base_database: str, shard_count: int = DEFAULT_SHARD_COUNT) -> None:
-    for shard_id in range(shard_count):
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{base_database}_shard_{shard_id}`")
+def require_shard_databases(cursor, base_database: str, shard_count: int = DEFAULT_SHARD_COUNT) -> None:
+    expected_databases = [f"{base_database}_shard_{shard_id}" for shard_id in range(shard_count)]
+    placeholders = ", ".join(["%s"] * len(expected_databases))
+    cursor.execute(
+        f"SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME IN ({placeholders})",
+        expected_databases,
+    )
+    found_databases = {row[0] for row in cursor.fetchall()}
+    missing_databases = [database for database in expected_databases if database not in found_databases]
+    if missing_databases:
+        raise RuntimeError(
+            "Missing shard database(s): " + ", ".join(missing_databases)
+        )
 
 
 def build_insert_statement(database: str, table: str, columns: list[str]) -> str:
@@ -203,8 +213,7 @@ def main() -> None:
     source_connection = connect(config, database=config.source_database)
     source_cursor = source_connection.cursor()
 
-    ensure_shard_databases(source_cursor, config.source_database)
-    source_connection.commit()
+    require_shard_databases(source_cursor, config.source_database)
 
     shard_connections = [connect(config, database=f"{config.source_database}_shard_{shard_id}") for shard_id in range(DEFAULT_SHARD_COUNT)]
 

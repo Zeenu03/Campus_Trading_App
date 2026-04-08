@@ -100,13 +100,18 @@ func fetchListingRowsAcrossShards(ctx context.Context, baseWhere string, args []
 }
 ```
 
-The offer workflow uses the listing ID to choose the owner shard before reading or writing related rows:
+Related-record routing, especially for the offer workflow, is pinned by the listing ID. Once the listing ID is known, the backend routes listing-local reads and writes to the same shard so multi-step operations stay colocated. For inserts, the new listing ID is allocated first and then used to choose the target shard. Replicated or global tables such as Member and Category are still read from their own placements when needed.
 
-```go
-listingDB := listingShardDB(listingID)
-```
+The mapping used in the backend is:
 
-This keeps shard selection consistent across reads, inserts, and multi-step operations.
+| Query type | Routing behaviour | Example |
+| --- | --- | --- |
+| Single lookup | Direct to owning shard | `GET /listings/{id}` |
+| Single insert | Allocate the new ListingID, then write to the owning shard | `POST /listings` |
+| Related write | Route via the parent listing shard | `POST /listings/{id}/offers` |
+| Browse / range | Fan-out across shards and merge results | `GET /listings` |
+
+This matches the backend pattern of using `listingShardDB(listingID)` for listing-local operations and `fetchListingRowsAcrossShards(...)` for browse-style reads.
 
 ## 4. SQL Shard Tables Created and How Data Was Migrated
 
