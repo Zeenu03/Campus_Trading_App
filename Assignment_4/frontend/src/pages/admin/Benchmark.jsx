@@ -45,7 +45,7 @@ export default function AdminBenchmark() {
         <h2 className="text-base font-semibold">How to use:</h2>
         <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
           <li>Click <strong>"Run Before-Index Benchmark"</strong> to record baseline (no indexes).</li>
-          <li>Run <code className="bg-gray-100 px-1 rounded">mysql -u root -p CampusTradingB &lt; sql/indexes.sql</code></li>
+          <li>Run <code className="bg-gray-100 px-1 rounded">mysql -u &lt;team_name&gt; -p &lt;team_name&gt; &lt; sql/indexes.sql</code></li>
           <li>Click <strong>"Run After-Index Benchmark"</strong> to see improvement.</li>
         </ol>
         <div className="flex gap-3 flex-wrap">
@@ -71,8 +71,11 @@ export default function AdminBenchmark() {
             <div className="grid gap-3 md:grid-cols-3">
               {sharding.shards?.map((shard) => (
                 <div key={shard.shard_id} className="bg-white border border-blue-100 rounded-lg p-3">
-                  <div className="text-xs uppercase tracking-wide text-blue-500 font-semibold">Shard {shard.shard_id}</div>
-                  <div className="font-mono text-sm text-gray-800 mt-1">{shard.database_name}</div>
+                  <div className="text-xs uppercase tracking-wide text-blue-500 font-semibold">Shard {shard.shard_id + 1}</div>
+                  <div className="font-mono text-sm text-gray-800 mt-1">
+                    {shard.host && shard.port ? `${shard.host}:${shard.port}` : shard.database_name}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">{shard.database_name}</div>
                 </div>
               ))}
             </div>

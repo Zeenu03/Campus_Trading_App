@@ -34,12 +34,13 @@ func main() {
 
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
+		host := getEnv("DB_HOST", "localhost")
 		port := getEnv("DB_PORT", "3306")
 		user := getEnv("DB_USER", "root")
 		pass := getEnv("DB_PASSWORD", "")
 		name := getEnv("DB_NAME", "CampusTradingB")
 		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=UTC",
-			user, pass, "127.0.0.1", port, name)
+			user, pass, host, port, name)
 	}
 
 	db, err := sql.Open("mysql", dsn)

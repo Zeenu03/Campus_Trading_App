@@ -18,6 +18,8 @@ const (
 
 type ShardTarget struct {
 	ShardID      int    `json:"shard_id"`
+	Host         string `json:"host,omitempty"`
+	Port         int    `json:"port,omitempty"`
 	DatabaseName string `json:"database_name"`
 }
 
@@ -47,10 +49,11 @@ var (
 	configMu     sync.RWMutex
 	baseDatabase = "CampusTradingB"
 	shardCount   = DefaultShardCount
+	shardTargets []ShardTarget
 )
 
 var tableRoutes = map[string]TableRoute{
-	"Administrator": {TableName: "Administrator", KeyColumn: "AdminID", Placement: PlacementReplicate},
+	"Administrator": {TableName: "Administrator", KeyColumn: "AdminID", Placement: PlacementCentral},
 	"Category":      {TableName: "Category", KeyColumn: "CategoryID", Placement: PlacementReplicate},
 	"Member":        {TableName: "Member", KeyColumn: "MemberID", Placement: PlacementPartition},
 	"WishRequest":   {TableName: "WishRequest", KeyColumn: "WishRequestID", Placement: PlacementPartition},
@@ -68,13 +71,14 @@ var tableRoutes = map[string]TableRoute{
 
 var centralTables = []string{
 	"audit_log",
+	"Administrator",
 	"sys_role",
 	"sys_session",
 	"sys_user",
 	"sys_user_role",
 }
 
-func Configure(baseDB string, count int) {
+func Configure(baseDB string, count int, targets []ShardTarget) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
@@ -84,12 +88,18 @@ func Configure(baseDB string, count int) {
 	if count > 0 {
 		shardCount = count
 	}
+	if len(targets) > 0 {
+		shardTargets = normalizeTargets(baseDatabase, shardCount, targets)
+	} else {
+		shardTargets = nil
+	}
 }
 
 func CurrentConfiguration() Configuration {
 	configMu.RLock()
 	base := baseDatabase
 	count := shardCount
+	targets := append([]ShardTarget(nil), shardTargets...)
 	configMu.RUnlock()
 
 	router := NewRouter(base, count)
@@ -117,7 +127,7 @@ func CurrentConfiguration() Configuration {
 		BaseDatabase:      base,
 		ShardCount:        count,
 		RoutingRule:       fmt.Sprintf("record_id %% %d", count),
-		Shards:            router.Targets(),
+		Shards:            targetsForRouter(router, targets),
 		TableRoutes:       routes,
 		PartitionedTables: partitioned,
 		ReplicatedTables:  replicated,
@@ -147,26 +157,23 @@ func (r *Router) ShardIDFor(recordID int) int {
 }
 
 func (r *Router) DatabaseNameFor(shardID int) string {
-	if r == nil {
-		return fmt.Sprintf("CampusTradingB_shard_%d", shardID)
+	target := defaultTargetForShard(r, shardID)
+	if configured, ok := configuredTargetForShard(r, shardID); ok && configured.DatabaseName != "" {
+		return configured.DatabaseName
 	}
-	return fmt.Sprintf("%s_shard_%d", r.baseDatabase, shardID)
+	return target.DatabaseName
 }
 
 func (r *Router) TargetFor(recordID int) ShardTarget {
 	shardID := r.ShardIDFor(recordID)
-	return ShardTarget{ShardID: shardID, DatabaseName: r.DatabaseNameFor(shardID)}
+	if target, ok := configuredTargetForShard(r, shardID); ok {
+		return target
+	}
+	return defaultTargetForShard(r, shardID)
 }
 
 func (r *Router) Targets() []ShardTarget {
-	if r == nil || r.shardCount <= 0 {
-		return []ShardTarget{{ShardID: 0, DatabaseName: "CampusTradingB_shard_0"}}
-	}
-	targets := make([]ShardTarget, 0, r.shardCount)
-	for shardID := 0; shardID < r.shardCount; shardID++ {
-		targets = append(targets, ShardTarget{ShardID: shardID, DatabaseName: r.DatabaseNameFor(shardID)})
-	}
-	return targets
+	return shardTargetsForRouter(r)
 }
 
 func RouteTableRow(tableName string, rowID int) (ShardTarget, TableRoute, error) {
@@ -182,7 +189,14 @@ func RouteTableRow(tableName string, rowID int) (ShardTarget, TableRoute, error)
 	router := NewRouter(base, count)
 
 	if route.Placement == PlacementReplicate {
-		return ShardTarget{ShardID: 0, DatabaseName: router.DatabaseNameFor(0)}, route, nil
+		return router.Targets()[0], route, nil
+	}
+	if route.Placement == PlacementCentral {
+		targets := router.Targets()
+		if len(targets) > 0 {
+			return targets[0], route, nil
+		}
+		return ShardTarget{ShardID: 0, DatabaseName: router.baseDatabase}, route, nil
 	}
 	return router.TargetFor(rowID), route, nil
 }
@@ -192,8 +206,90 @@ func DescribeRoute(tableName string, rowID int) string {
 	if err != nil {
 		return err.Error()
 	}
+	shardLabel := target.ShardID + 1
 	if route.Placement == PlacementReplicate {
 		return fmt.Sprintf("%s:%d -> all shards", tableName, rowID)
 	}
-	return fmt.Sprintf("%s:%d -> shard_%d (%s)", tableName, rowID, target.ShardID, target.DatabaseName)
+	if route.Placement == PlacementCentral {
+		if target.Host != "" && target.Port > 0 {
+			return fmt.Sprintf("%s:%d -> central shard_%d (%s:%d/%s)", tableName, rowID, shardLabel, target.Host, target.Port, target.DatabaseName)
+		}
+		return fmt.Sprintf("%s:%d -> central shard_%d (%s)", tableName, rowID, shardLabel, target.DatabaseName)
+	}
+	if target.Host != "" && target.Port > 0 {
+		return fmt.Sprintf("%s:%d -> shard_%d (%s:%d/%s)", tableName, rowID, shardLabel, target.Host, target.Port, target.DatabaseName)
+	}
+	return fmt.Sprintf("%s:%d -> shard_%d (%s)", tableName, rowID, shardLabel, target.DatabaseName)
+}
+
+func normalizeTargets(base string, count int, targets []ShardTarget) []ShardTarget {
+	normalized := make([]ShardTarget, 0, len(targets))
+	for idx, target := range targets {
+		if target.ShardID != idx {
+			target.ShardID = idx
+		}
+		if target.DatabaseName == "" {
+			target.DatabaseName = base
+		}
+		normalized = append(normalized, target)
+	}
+	if count > 0 && len(normalized) > count {
+		normalized = normalized[:count]
+	}
+	return normalized
+}
+
+func shardTargetsForRouter(r *Router) []ShardTarget {
+	configMu.RLock()
+	targets := append([]ShardTarget(nil), shardTargets...)
+	configMu.RUnlock()
+	if r == nil {
+		return targets
+	}
+	if len(targets) == r.shardCount && len(targets) > 0 {
+		return targets
+	}
+	if r.shardCount <= 0 {
+		return []ShardTarget{defaultTargetForShard(r, 0)}
+	}
+	fallback := make([]ShardTarget, 0, r.shardCount)
+	for shardID := 0; shardID < r.shardCount; shardID++ {
+		fallback = append(fallback, defaultTargetForShard(r, shardID))
+	}
+	return fallback
+}
+
+func targetsForRouter(r *Router, targets []ShardTarget) []ShardTarget {
+	if len(targets) > 0 {
+		return targets
+	}
+	return shardTargetsForRouter(r)
+}
+
+func configuredTargetForShard(r *Router, shardID int) (ShardTarget, bool) {
+	if r == nil || shardID < 0 {
+		return ShardTarget{}, false
+	}
+	configMu.RLock()
+	targets := append([]ShardTarget(nil), shardTargets...)
+	configMu.RUnlock()
+	if len(targets) != r.shardCount || shardID >= len(targets) {
+		return ShardTarget{}, false
+	}
+	target := targets[shardID]
+	if target.ShardID != shardID {
+		target.ShardID = shardID
+	}
+	if target.DatabaseName == "" {
+		target.DatabaseName = r.baseDatabase
+	}
+	return target, true
+}
+
+func defaultTargetForShard(r *Router, shardID int) ShardTarget {
+	base := "CampusTradingB"
+	if r != nil && r.baseDatabase != "" {
+		base = r.baseDatabase
+	}
+	return ShardTarget{ShardID: shardID, DatabaseName: base}
 }
