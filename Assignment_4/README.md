@@ -1,16 +1,16 @@
 # Assignment 4 Sharding
 
-This folder contains the Assignment 4 sharding deliverable for the Campus Trading App.
+This folder contains the Assignment 4 sharding work for the Campus Trading App.
 
-The design uses three simulated shards and a modulo routing rule:
+The implementation follows the Task 1 shard layout with three shard endpoints and a modulo routing rule:
 
 `shard_id = record_id % 3`
 
-The source database is `CampusTradingB` and the shard databases are:
+Use the assigned database name on each shard host. The expected shard endpoints are:
 
-- `CampusTradingB_shard_0`
-- `CampusTradingB_shard_1`
-- `CampusTradingB_shard_2`
+- Shard 1: `10.0.116.184:3307`
+- Shard 2: `10.0.116.184:3308`
+- Shard 3: `10.0.116.184:3309`
 
 ## Prerequisites
 
@@ -27,11 +27,11 @@ The source database is `CampusTradingB` and the shard databases are:
 - `implementation/` - shared Python shard router used by the migration and verification scripts.
 - `scripts/` - migration and verification utilities for the shard databases.
 - `sql/` - SQL used to create the shard schema.
-- `Report.pdf` - final written report for the assignment.
+- `Report.md` - final written report for the assignment.
 
 ## Quick Start
 
-1. Make sure MySQL 8 is running and the original `CampusTradingB` database already exists.
+1. Make sure MySQL 8 is running and the assigned database already exists on the shard hosts.
 2. Create and activate a Python virtual environment if needed. In this workspace, the scripts were run with the venv:
 
    - `source .venv/bin/activate`
@@ -40,31 +40,35 @@ The source database is `CampusTradingB` and the shard databases are:
 
    - `pip install -r requirements.txt`
 
-4. Create the three shard databases and shard tables by running [sql/create_shards.sql](sql/create_shards.sql) on the MySQL server.
+4. Configure the shard endpoints in [backend/.env.example](backend/.env.example) or your local `.env`.
 
    ```bash
-   cd Assignment_4
-   mysql -h {IP or localhost} -P 3306 -u root -p CampusTradingB < sql/create_shards.sql
-   ```
-
-   To verify that the shard databases were created, you can run:
-
-   ```bash
-   mysql -h {IP or localhost} -P 3306 -u root -p -e "SHOW DATABASES LIKE 'CampusTradingB_shard_%';"
+   export SHARD_0_HOST=10.0.116.184
+   export SHARD_0_PORT=3307
+   export SHARD_1_HOST=10.0.116.184
+   export SHARD_1_PORT=3308
+   export SHARD_2_HOST=10.0.116.184
+   export SHARD_2_PORT=3309
    ```
 
 5. Seed or prepare the source database with the desired sample data.
-6. Run the migration script to copy rows into the three shards.
-7. Run the verification script to confirm totals and duplicate checks.
-8. Start the backend and frontend to test shard-backed browse and insert flows in the browser.
+6. Initialize the shard schema first if the shard databases are empty.
+
+   ```bash
+   python scripts/init_shards.py --host 10.7.27.157 --port 3306 --user root --password root --source CampusTradingB
+   ```
+
+7. Run the migration script to copy rows into the three shards.
+8. Run the verification script to confirm totals, duplicate checks, and that the central tables stay on Shard 1.
+9. Start the backend and frontend to test shard-backed browse and insert flows in the browser.
 
 ## Migration and Verification
 
 Run the scripts from this folder:
 
 ```bash
-python scripts/migrate_shards.py --host {IP} --port {PORT} --user {user} --password {password} --source {SourceDatabaseName}
-python scripts/verify_shards.py --host {IP} --port {PORT} --user {user} --password {password} --source {SourceDatabaseName}
+python scripts/migrate_shards.py --host 10.0.116.184 --port 3306 --user {user} --password {password} --source {SourceDatabaseName} --shard-hosts 10.0.116.184,10.0.116.184,10.0.116.184 --shard-ports 3307,3308,3309
+python scripts/verify_shards.py --host 10.0.116.184 --port 3306 --user {user} --password {password} --source {SourceDatabaseName} --shard-hosts 10.0.116.184,10.0.116.184,10.0.116.184 --shard-ports 3307,3308,3309
 ```
 
 The migration script writes a JSON summary beside the script after copying the data.
@@ -89,11 +93,10 @@ npm install
 npm run dev
 ```
 
-For local development, the environment files should point to localhost:
+For local development, the environment files can still point to localhost. For Task 1, update the shard hosts and ports to the provided MySQL endpoints.
 
 - `backend/.env` should use `FRONTEND_URL=http://{IP or localhost}:5173`
 - `frontend/.env` should use `VITE_API_URL=http://localhost:8080/api/v1`
-
 
 ## Generated Outputs
 
@@ -103,10 +106,10 @@ For local development, the environment files should point to localhost:
 
 ## Important Files
 
-- [Sharding report](Report.pdf) - written analysis of the sharding strategy, query routing, and trade-offs.
-- [Shard DDL](sql/create_shards.sql) - creates the three shard databases and the table layout used for the simulation.
+- [Sharding report](Report.md) - written analysis of the sharding strategy, query routing, and trade-offs.
+- [Shard DDL](sql/create_shards.sql) - legacy helper for the local single-server shard simulation.
 - [Shard router](implementation/shard_router.py) - central modulo routing logic shared by the migration and verification scripts.
-- [Migration script](scripts/migrate_shards.py) - copies rows from `CampusTradingB` into the correct shard and writes a migration summary.
+- [Migration script](scripts/migrate_shards.py) - copies rows from the source database into the correct shard hosts and writes a migration summary.
 - [Verification script](scripts/verify_shards.py) - checks row counts and duplicate keys after migration.
 - [Python dependencies](requirements.txt) - lists the Python package required for MySQL access.
 - [Backend handlers](backend/handlers) - shard-aware lookup, insert, and browse logic for the live app.
@@ -115,16 +118,17 @@ For local development, the environment files should point to localhost:
 
 - `backend/` and `frontend/` are the live application pieces that demonstrate the shard routing in the browser.
 - `scripts/` and `implementation/` are the supporting utilities used to move and validate the data.
-- `Report.pdf` is the written analysis for the assignment submission.
+- `Report.md` is the written analysis for the assignment submission.
 
 ## How the Design Is Used
 
 - Partitioned tables use the modulo rule so that rows with the same primary key always go to the same shard.
-- Reference tables such as `Category` and `Administrator` are replicated to every shard.
+- `Category` is replicated to every shard, while `Administrator` and the low-usage control tables live only on Shard 1.
 - Range and browse queries fan out across shards and merge results in application code.
-- Central authentication, session, and audit tables remain on the base database, while shard-owned business data is routed to the shard databases.
+- Central authentication, session, and audit tables live only on Shard 1, while Shard 2 and Shard 3 contain only replicated and partitioned tables.
 
 ## Notes
 
-- The assignment is intentionally implemented as database-per-shard simulation, which satisfies the “multiple databases on the same server” option.
-- The report documents the main trade-offs: scaling, consistency, availability, and partition tolerance.
+- The assignment now uses the provided shard hosts and can still fall back to a local single-server simulation if you override the shard environment variables.
+- The shard schema initializer creates the required tables on the three shard databases before migration.
+- The report covers the main trade-offs: scaling, consistency, availability, and partition tolerance.
