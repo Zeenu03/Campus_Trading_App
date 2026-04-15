@@ -19,10 +19,17 @@ func shardDBForTableRow(tableName string, rowID int) *sql.DB {
 	if err != nil {
 		return appdb.DB
 	}
+	if route.Placement == sharding.PlacementCentral {
+		return centralShardDB()
+	}
 	if route.Placement == sharding.PlacementReplicate {
 		return appdb.ShardConnectionForID(0)
 	}
 	return appdb.ShardConnectionForID(target.ShardID)
+}
+
+func centralShardDB() *sql.DB {
+	return appdb.ShardConnectionForID(0)
 }
 
 func replicatedShardDB() *sql.DB {

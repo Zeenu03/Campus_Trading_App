@@ -77,9 +77,16 @@ func SessionGuard(next http.Handler) http.Handler {
 
 		// Resolve MemberID for member users (NULL for admin-only users)
 		var memberID int
-		_ = appdb.DB.QueryRowContext(r.Context(),
-			`SELECT MemberID FROM Member WHERE user_id = ?`, userID,
-		).Scan(&memberID)
+		for _, shardDB := range appdb.AllShardConnections() {
+			err = shardDB.QueryRowContext(r.Context(), `SELECT MemberID FROM Member WHERE user_id = ?`, userID).Scan(&memberID)
+			if err == nil {
+				break
+			}
+			if err != sql.ErrNoRows {
+				respondUnauthorized(w, "member lookup error")
+				return
+			}
+		}
 
 		ctx := context.WithValue(r.Context(), CtxUserID, userID)
 		ctx = context.WithValue(ctx, CtxRoles, roles)

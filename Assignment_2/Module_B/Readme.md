@@ -3,7 +3,7 @@
 A full-stack campus marketplace for IIT Gandhinagar students — buy, sell, offer, chat, and rate, all within a verified `@iitgn.ac.in` community.
 
 **Stack:** Go 1.21+ (Chi router) · MySQL 8.0 · React 18 (Vite) · Tailwind CSS  
-**All source lives under `Assignment2/ModuleB/`.**
+**All source lives under `Assignment_2/Module_B/`.**
 
 ---
 
@@ -24,7 +24,7 @@ A full-stack campus marketplace for IIT Gandhinagar students — buy, sell, offe
 
 ```bash
 # Clone and enter the project directory
-cd Assignment2/Module_B
+cd Assignment_2/Module_B
 
 # 1. Start MySQL in Docker (auto-loads sql/init.sql)
 docker compose up -d
@@ -54,10 +54,10 @@ Open **http://localhost:5173** and log in with `superadmin@iitgn.ac.in` / `Admin
 
 ```bash
 # 1. Run the schema script against your local MySQL instance
-mysql -u root -p < Assignment2/ModuleB/sql/init.sql
+mysql -u root -p < Assignment_2/Module_B/sql/init.sql
 
 # 2. Set your credentials in backend/.env
-cp Assignment2/ModuleB/backend/.env.example Assignment2/ModuleB/backend/.env
+cp Assignment_2/Module_B/backend/.env.example Assignment_2/Module_B/backend/.env
 # Edit DB_HOST / DB_USER / DB_PASSWORD as needed
 
 # 3. Seed SuperAdmin, start backend & frontend (same as steps 4–6 above)
@@ -67,7 +67,7 @@ cp Assignment2/ModuleB/backend/.env.example Assignment2/ModuleB/backend/.env
 
 ## Environment Variables
 
-All configuration is in `Assignment2/ModuleB/backend/.env`:
+All configuration is in `Assignment_2/Module_B/backend/.env`:
 
 ```env
 # MySQL connection
@@ -98,7 +98,7 @@ SUPERADMIN_NAME=Super Administrator
 ### SuperAdmin (required)
 
 ```bash
-cd Assignment2/ModuleB/backend
+cd Assignment_2/Module_B/backend
 go run ./cmd/seed
 ```
 
@@ -111,7 +111,7 @@ go run ./cmd/seed
 ### Sample Members (optional)
 
 ```bash
-cd Assignment2/ModuleB/backend
+cd Assignment_2/Module_B/backend
 go run ./cmd/seedmembers
 ```
 
@@ -128,7 +128,7 @@ The benchmark script connects directly to MySQL, seeds realistic data, measures 
 ### 1. Install Python dependencies
 
 ```bash
-cd Assignment2/ModuleB/scripts
+cd Assignment_2/Module_B/scripts
 pip install -r requirements.txt
 ```
 
@@ -142,7 +142,7 @@ matplotlib>=3.7.0
 ### 2. Run the benchmark
 
 ```bash
-# From Assignment2/ModuleB/scripts/
+# From Assignment_2/Module_B/scripts/
 python benchmark.py \
   --host 127.0.0.1 \
   --port 3306 \
@@ -194,10 +194,10 @@ To apply or reapply indexes without running the full script:
 ```bash
 # Docker
 docker exec -i campus_trading_mysql \
-  mysql -uroot -proot CampusTradingB < Assignment2/ModuleB/sql/indexes.sql
+  mysql -uroot -proot CampusTradingB < Assignment_2/Module_B/sql/indexes.sql
 
 # Local MySQL
-mysql -u root -p CampusTradingB < Assignment2/ModuleB/sql/indexes.sql
+mysql -u root -p CampusTradingB < Assignment_2/Module_B/sql/indexes.sql
 ```
 
 To verify indexes were created:
@@ -371,7 +371,7 @@ In the admin UI (`/admin/audit`), these rows are highlighted red.
 ## File Structure
 
 ```
-Assignment2/ModuleB/
+Assignment_2/Module_B/
 ├── backend/
 │   ├── main.go                  # Chi router, CORS, middleware chain, routes
 │   ├── go.mod / go.sum
