@@ -6,12 +6,11 @@ CREATE DATABASE IF NOT EXISTS CampusTradingB_shard_0;
 CREATE DATABASE IF NOT EXISTS CampusTradingB_shard_1;
 CREATE DATABASE IF NOT EXISTS CampusTradingB_shard_2;
 
+-- Member is central and only created on shard 1.
+CREATE TABLE IF NOT EXISTS CampusTradingB_shard_0.Member LIKE CampusTradingB.Member;
+
 -- Reference tables are replicated to every shard.
 -- Partitioned tables are created in dependency order so foreign keys can be restored safely.
-CREATE TABLE IF NOT EXISTS CampusTradingB_shard_0.Member LIKE CampusTradingB.Member;
-CREATE TABLE IF NOT EXISTS CampusTradingB_shard_1.Member LIKE CampusTradingB.Member;
-CREATE TABLE IF NOT EXISTS CampusTradingB_shard_2.Member LIKE CampusTradingB.Member;
-
 CREATE TABLE IF NOT EXISTS CampusTradingB_shard_0.Administrator LIKE CampusTradingB.Administrator;
 CREATE TABLE IF NOT EXISTS CampusTradingB_shard_1.Administrator LIKE CampusTradingB.Administrator;
 CREATE TABLE IF NOT EXISTS CampusTradingB_shard_2.Administrator LIKE CampusTradingB.Administrator;
@@ -64,7 +63,6 @@ CREATE TABLE IF NOT EXISTS CampusTradingB_shard_0.Rating LIKE CampusTradingB.Rat
 CREATE TABLE IF NOT EXISTS CampusTradingB_shard_1.Rating LIKE CampusTradingB.Rating;
 CREATE TABLE IF NOT EXISTS CampusTradingB_shard_2.Rating LIKE CampusTradingB.Rating;
 
--- Data migration will use the modulo router in Go:
---   shard_id = ListingID % 3
---   shard_id = MemberID % 3
+-- Data migration will use the modulo router in Go for partitioned tables.
+-- Member stays central on shard 1.
 -- Follow-up step: copy rows from CampusTradingB into the appropriate shard.

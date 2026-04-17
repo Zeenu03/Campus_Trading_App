@@ -247,17 +247,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.ExecContext(r.Context(),
-		`INSERT INTO Member (user_id, Name, ContactNumber, Department, YearOfStudy, Hostel, RoomNumber, Bio)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, req.Name, req.ContactNumber,
-		req.Department, req.YearOfStudy, req.Hostel, req.RoomNumber, req.Bio,
-	)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "member creation failed")
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		respondError(w, http.StatusInternalServerError, "commit failed")
 		return

@@ -10,7 +10,9 @@ DEFAULT_SHARD_COUNT = 3
 @dataclass(frozen=True)
 class ShardTarget:
     shard_id: int
-    database_name: str
+    host: str = ""
+    port: int = 0
+    database_name: str = ""
 
 
 class ShardRouter:
@@ -24,7 +26,7 @@ class ShardRouter:
         return record_id % self.shard_count
 
     def database_name_for(self, shard_id: int) -> str:
-        return f"{self.base_database}_shard_{shard_id}"
+        return self.base_database
 
     def target_for(self, record_id: int) -> ShardTarget:
         shard_id = self.shard_id_for(record_id)
@@ -36,8 +38,13 @@ class ShardRouter:
 
 
 TABLE_ROUTING = {
-    "Administrator": ("AdminID", "replicate"),
-    "Member": ("MemberID", "partition"),
+    "Administrator": ("AdminID", "central"),
+    "audit_log": ("log_id", "central"),
+    "sys_role": ("role_id", "central"),
+    "sys_session": ("session_id", "central"),
+    "sys_user": ("user_id", "central"),
+    "sys_user_role": ("user_id", "central"),
+    "Member": ("MemberID", "central"),
     "WishRequest": ("WishRequestID", "partition"),
     "Listing": ("ListingID", "partition"),
     "ListingImage": ("ImageID", "partition"),
@@ -52,6 +59,8 @@ TABLE_ROUTING = {
     "Category": ("CategoryID", "replicate"),
 }
 
+CENTRAL_SHARD_ID = 0
+
 
 def route_table_row(table_name: str, row_id: int, shard_count: int = DEFAULT_SHARD_COUNT) -> int:
     if table_name not in TABLE_ROUTING:
@@ -60,11 +69,16 @@ def route_table_row(table_name: str, row_id: int, shard_count: int = DEFAULT_SHA
     _, strategy = TABLE_ROUTING[table_name]
     if strategy == "replicate":
         return 0
+    if strategy == "central":
+        return CENTRAL_SHARD_ID if shard_count > CENTRAL_SHARD_ID else 0
     return router.shard_id_for(row_id)
 
 
 def describe_route(table_name: str, row_id: int, shard_count: int = DEFAULT_SHARD_COUNT) -> str:
     shard_id = route_table_row(table_name, row_id, shard_count=shard_count)
-    if TABLE_ROUTING.get(table_name, (None, "partition"))[1] == "replicate":
+    strategy = TABLE_ROUTING.get(table_name, (None, "partition"))[1]
+    if strategy == "replicate":
         return f"{table_name}:{row_id} -> all shards"
-    return f"{table_name}:{row_id} -> shard_{shard_id}"
+    if strategy == "central":
+        return f"{table_name}:{row_id} -> central shard_{shard_id + 1}"
+    return f"{table_name}:{row_id} -> shard_{shard_id + 1}"

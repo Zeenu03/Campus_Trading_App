@@ -25,7 +25,7 @@ func ListMembers(w http.ResponseWriter, r *http.Request) {
 		like := "%" + search + "%"
 		args = append(args, like, like)
 	}
-	_ = appdb.DB.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
+	_ = centralShardDB().QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 
 	offset, totalPages := paginate(page, pageSize, total)
 
@@ -38,7 +38,7 @@ func ListMembers(w http.ResponseWriter, r *http.Request) {
 	query += " ORDER BY m.AccountCreationDate DESC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
 
-	rows, err := appdb.DB.QueryContext(r.Context(), query, args...)
+	rows, err := centralShardDB().QueryContext(r.Context(), query, args...)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "query failed")
 		return
@@ -331,7 +331,7 @@ func UpdateMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var targetUserID int
-		err = appdb.DB.QueryRowContext(ctx,
+		err = centralShardDB().QueryRowContext(ctx,
 			`SELECT user_id FROM Member WHERE MemberID = ?`, memberID).Scan(&targetUserID)
 		if err == sql.ErrNoRows {
 			respondError(w, http.StatusNotFound, "member not found")
@@ -341,14 +341,14 @@ func UpdateMember(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, "lookup failed")
 			return
 		}
-		_, err = appdb.DB.ExecContext(ctx,
+		_, err = centralShardDB().ExecContext(ctx,
 			`UPDATE sys_user SET is_active = ? WHERE user_id = ?`, active, targetUserID)
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "update failed")
 			return
 		}
 		if !active {
-			_, _ = appdb.DB.ExecContext(ctx,
+			_, _ = centralShardDB().ExecContext(ctx,
 				`UPDATE sys_session SET is_revoked = TRUE WHERE user_id = ?`, targetUserID)
 		}
 		updatedActive = true
@@ -390,7 +390,7 @@ func UpdateMember(w http.ResponseWriter, r *http.Request) {
 	}
 	args = append(args, memberID)
 
-	_, err = appdb.DB.ExecContext(ctx,
+	_, err = centralShardDB().ExecContext(ctx,
 		"UPDATE Member SET "+strings.Join(setClauses, ", ")+" WHERE MemberID = ?", args...)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "update failed")
@@ -411,7 +411,7 @@ func DeleteMember(w http.ResponseWriter, r *http.Request) {
 
 	// Get user_id for the member
 	var userID int
-	err = appdb.DB.QueryRowContext(ctx,
+	err = centralShardDB().QueryRowContext(ctx,
 		`SELECT user_id FROM Member WHERE MemberID = ?`, memberID).Scan(&userID)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "member not found")

@@ -90,7 +90,7 @@ func AddToWatchlist(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "watchlist id allocation failed")
 		return
 	}
-	tx, err := memberShardDB(memberID).BeginTx(ctx, nil)
+	tx, err := watchlistShardDB(watchlistID).BeginTx(ctx, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "tx failed")
 		return
@@ -140,9 +140,9 @@ func RemoveFromWatchlistByListing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var watchlistID int
-	err = memberShardDB(memberID).QueryRowContext(ctx,
+	_, err = rowFromAllShards(ctx, []any{&watchlistID},
 		`SELECT WatchlistID FROM Watchlist WHERE ListingID = ? AND MemberID = ?`,
-		listingID, memberID).Scan(&watchlistID)
+		listingID, memberID)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "not watching this listing")
 		return
@@ -152,7 +152,7 @@ func RemoveFromWatchlistByListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := memberShardDB(memberID).BeginTx(ctx, nil)
+	tx, err := watchlistShardDB(watchlistID).BeginTx(ctx, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "tx failed")
 		return
@@ -176,10 +176,23 @@ func RemoveFromWatchlist(w http.ResponseWriter, r *http.Request) {
 	var memberID int
 	var ownerUserID int
 	err = watchlistShardDB(watchlistID).QueryRowContext(ctx,
-		`SELECT w.MemberID, m.user_id FROM Watchlist w JOIN Member m ON m.MemberID = w.MemberID WHERE w.WatchlistID = ?`,
-		watchlistID).Scan(&memberID, &ownerUserID)
+		`SELECT MemberID FROM Watchlist WHERE WatchlistID = ?`, watchlistID).Scan(&memberID)
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "watchlist entry not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+	err = centralShardDB().QueryRowContext(ctx,
+		`SELECT user_id FROM Member WHERE MemberID = ?`, memberID).Scan(&ownerUserID)
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusNotFound, "member not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "lookup failed")
 		return
 	}
 	if !mw.IsOwnerOrAdmin(ctx, ownerUserID) {
