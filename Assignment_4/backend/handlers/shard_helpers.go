@@ -115,6 +115,15 @@ func rowsFromAllShards(ctx context.Context, query string, args ...any) ([]*sql.R
 }
 
 func nextRecordID(ctx context.Context, tableName string, pkColumn string) (int, error) {
+	_, route, err := sharding.RouteTableRow(tableName, 0)
+	if err == nil && (route.Placement == sharding.PlacementCentral || route.Placement == sharding.PlacementReplicate) {
+		query := fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) FROM %s", pkColumn, tableName)
+		var maxID int
+		if err := centralShardDB().QueryRowContext(ctx, query).Scan(&maxID); err != nil {
+			return 0, err
+		}
+		return maxID + 1, nil
+	}
 	maxID := 0
 	for _, shardDB := range appdb.AllShardConnections() {
 		query := fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) FROM %s", pkColumn, tableName)

@@ -52,7 +52,6 @@ SCHEMA_TABLES = [
 ]
 
 PARTITION_TABLES = [
-    "Member",
     "WishRequest",
     "WishRequestImage",
     "Listing",
@@ -75,6 +74,7 @@ CENTRAL_TABLES = [
     "sys_session",
     "audit_log",
     "Administrator",
+    "Member",
 ]
 
 REPLICATED_TABLES = [

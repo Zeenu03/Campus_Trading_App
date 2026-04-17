@@ -55,7 +55,7 @@ var (
 var tableRoutes = map[string]TableRoute{
 	"Administrator": {TableName: "Administrator", KeyColumn: "AdminID", Placement: PlacementCentral},
 	"Category":      {TableName: "Category", KeyColumn: "CategoryID", Placement: PlacementReplicate},
-	"Member":        {TableName: "Member", KeyColumn: "MemberID", Placement: PlacementPartition},
+	"Member":        {TableName: "Member", KeyColumn: "MemberID", Placement: PlacementCentral},
 	"WishRequest":   {TableName: "WishRequest", KeyColumn: "WishRequestID", Placement: PlacementPartition},
 	"Listing":       {TableName: "Listing", KeyColumn: "ListingID", Placement: PlacementPartition},
 	"ListingImage":  {TableName: "ListingImage", KeyColumn: "ImageID", Placement: PlacementPartition},
@@ -72,6 +72,7 @@ var tableRoutes = map[string]TableRoute{
 var centralTables = []string{
 	"audit_log",
 	"Administrator",
+	"Member",
 	"sys_role",
 	"sys_session",
 	"sys_user",

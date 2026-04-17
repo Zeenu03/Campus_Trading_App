@@ -58,7 +58,7 @@ var tableRoutes = map[string]TableRoute{
 	"sys_session":   {TableName: "sys_session", KeyColumn: "session_id", Placement: PlacementCentral},
 	"sys_user":      {TableName: "sys_user", KeyColumn: "user_id", Placement: PlacementCentral},
 	"sys_user_role": {TableName: "sys_user_role", KeyColumn: "user_id", Placement: PlacementCentral},
-	"Member":        {TableName: "Member", KeyColumn: "MemberID", Placement: PlacementPartition},
+	"Member":        {TableName: "Member", KeyColumn: "MemberID", Placement: PlacementCentral},
 	"WishRequest":   {TableName: "WishRequest", KeyColumn: "WishRequestID", Placement: PlacementPartition},
 	"Listing":       {TableName: "Listing", KeyColumn: "ListingID", Placement: PlacementPartition},
 	"ListingImage":  {TableName: "ListingImage", KeyColumn: "ImageID", Placement: PlacementPartition},
@@ -73,9 +73,9 @@ var tableRoutes = map[string]TableRoute{
 }
 ```
 
-Category is copied to every shard because it is small and gets joined a lot during reads. The low-usage control tables stay on Shard 1 so authentication, session, and audit traffic does not get duplicated everywhere.
+Category is copied to every shard because it is small and gets joined a lot during reads. Member and the low-usage control tables stay on Shard 1 so authentication, session, and audit traffic does not get duplicated everywhere.
 
-In the final layout, Shard 1 holds the central tables, while Shard 2 and Shard 3 only hold the replicated and partitioned tables.
+In the final layout, Shard 1 holds the central tables, including Member, while Shard 2 and Shard 3 only hold the replicated and partitioned tables.
 
 ## 3. How Query Routing Is Implemented
 
@@ -130,7 +130,7 @@ CREATE DATABASE IF NOT EXISTS Optimiser;
 
 That database name is used on each assigned shard host.
 
-The shard databases contain the following tables. The control tables are centralized on Shard 1 and Category is replicated:
+The shard databases contain the following tables. Member and the control tables are centralized on Shard 1 and Category is replicated:
 
 - `sys_user`
 - `sys_role`
@@ -157,12 +157,12 @@ Migration is handled by [scripts/migrate_shards.py](scripts/migrate_shards.py). 
 1. Create the shard schema on each target shard.
 2. Read each row from the source database.
 3. Route partitioned rows using the modulo rule.
-4. Copy control-plane tables to shard 1 only.
+4. Copy control-plane tables and Member to Shard 1 only.
 5. Copy Category to every shard.
 6. Commit the shard writes.
 7. Summarize row counts and duplicate checks.
 
-The schema initialization step is handled by [scripts/init_shards.py](scripts/init_shards.py). It builds the shard tables from the source database DDL before the migration starts.
+The schema initialization step is handled by [scripts/init_shards.py](scripts/init_shards.py). It builds the shard tables from the source database DDL before the migration starts, with Member created only on Shard 1.
 
 The code makes that logic pretty clear:
 
@@ -235,11 +235,11 @@ The implementation does not try to do distributed consensus, quorum writes, or a
 
 ### Observations
 
-The modulo shard key gave a pretty even spread for the partitioned data set. The verified counts stayed close across the three shards, and the control-plane tables remained on Shard 1 as intended.
+The modulo shard key gave a pretty even spread for the partitioned data set. The verified counts stayed close across the three shards, and Member plus the control-plane tables remained on Shard 1 as intended.
 
-Once the shard endpoints were in place, the migration was straightforward. Partitioned tables went to one owning shard, control-plane tables were copied to Shard 1 only, Category was copied to all shards, and the verification script confirmed that the totals matched the source database.
+Once the shard endpoints were in place, the migration was straightforward. Partitioned tables went to one owning shard, Member and the control-plane tables were copied to Shard 1 only, Category was copied to all shards, and the verification script confirmed that the totals matched the source database.
 
-That verification also confirmed that Shard 2 and Shard 3 do not contain the central tables, which is the final server state I wanted.
+That verification also confirmed that Shard 2 and Shard 3 do not contain Member or the central tables, which is the final server state I wanted.
 
 One thing I noticed is that shard-aware access has to be explicit in the backend. Single-record lookups and writes can be routed directly, but browse-style queries still need fan-out across all shards and result merging in application code.
 

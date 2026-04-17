@@ -1,10 +1,5 @@
 {
   "partitioned": {
-    "Member": {
-      "0": 1,
-      "1": 2,
-      "2": 2
-    },
     "WishRequest": {
       "0": 34,
       "1": 35,
@@ -88,17 +83,22 @@
       "2": 0
     },
     "sys_session": {
-      "0": 0,
+      "0": 3,
       "1": 0,
       "2": 0
     },
     "audit_log": {
-      "0": 1276,
+      "0": 1290,
       "1": 0,
       "2": 0
     },
     "Administrator": {
       "0": 1,
+      "1": 0,
+      "2": 0
+    },
+    "Member": {
+      "0": 5,
       "1": 0,
       "2": 0
     }
@@ -117,8 +117,8 @@
     "sys_session": 0,
     "audit_log": 0,
     "Administrator": 0,
-    "Category": 0,
     "Member": 0,
+    "Category": 0,
     "WishRequest": 0,
     "WishRequestImage": 0,
     "Listing": 0,
@@ -134,13 +134,6 @@
     "Rating": 0
   },
   "row_counts": {
-    "Member": {
-      "source": 5,
-      "shard_0": 1,
-      "shard_1": 2,
-      "shard_2": 2,
-      "total_shards": 5
-    },
     "WishRequest": {
       "source": 103,
       "shard_0": 34,
@@ -254,18 +247,18 @@
       "total_shards": 6
     },
     "sys_session": {
-      "source": 0,
-      "shard_0": 0,
+      "source": 3,
+      "shard_0": 3,
       "shard_1": 0,
       "shard_2": 0,
-      "total_shards": 0
+      "total_shards": 3
     },
     "audit_log": {
-      "source": 1276,
-      "shard_0": 1276,
+      "source": 1290,
+      "shard_0": 1290,
       "shard_1": 0,
       "shard_2": 0,
-      "total_shards": 1276
+      "total_shards": 1290
     },
     "Administrator": {
       "source": 1,
@@ -273,6 +266,13 @@
       "shard_1": 0,
       "shard_2": 0,
       "total_shards": 1
+    },
+    "Member": {
+      "source": 5,
+      "shard_0": 5,
+      "shard_1": 0,
+      "shard_2": 0,
+      "total_shards": 5
     },
     "Category": {
       "source": 15,

@@ -106,7 +106,7 @@ func sortListingRows(rows []listingRow, sortKey string) {
 
 func memberNameByID(ctx context.Context, memberID int) string {
 	var name string
-	_, _ = rowFromAllShards(ctx, []any{&name}, `SELECT Name FROM Member WHERE MemberID = ?`, memberID)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT Name FROM Member WHERE MemberID = ?`, memberID).Scan(&name)
 	return name
 }
 
@@ -574,7 +574,7 @@ func UpdateListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sellerUserID int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
 		mw.RespondForbidden(w)
 		return
@@ -836,7 +836,7 @@ func DeleteListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sellerUserID int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
 		mw.RespondForbidden(w)
 		return
@@ -933,7 +933,7 @@ func AddListingImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sellerUserID int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
 		mw.RespondForbidden(w)
 		return
@@ -1073,7 +1073,7 @@ func DeleteListingImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sellerUserID int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerID).Scan(&sellerUserID)
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
 		mw.RespondForbidden(w)
 		return

@@ -123,9 +123,9 @@ For local development, the environment files can still point to localhost. For T
 ## How the Design Is Used
 
 - Partitioned tables use the modulo rule so that rows with the same primary key always go to the same shard.
-- `Category` is replicated to every shard, while `Administrator` and the low-usage control tables live only on Shard 1.
+- `Category` is replicated to every shard, while `Administrator`, `Member`, and the low-usage control tables live only on Shard 1.
 - Range and browse queries fan out across shards and merge results in application code.
-- Central authentication, session, and audit tables live only on Shard 1, while Shard 2 and Shard 3 contain only replicated and partitioned tables.
+- Central authentication, member, session, and audit tables live only on Shard 1, while Shard 2 and Shard 3 contain only replicated and partitioned tables.
 
 ## Notes
 

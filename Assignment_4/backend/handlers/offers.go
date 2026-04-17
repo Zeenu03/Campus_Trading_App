@@ -104,7 +104,7 @@ func ListOffersForListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sellerUserLookup int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerUserID).Scan(&sellerUserLookup)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, sellerUserID).Scan(&sellerUserLookup)
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserLookup) {
 		mw.RespondForbidden(w)
 		return
@@ -266,7 +266,7 @@ func AcceptOffer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sellerUserID int
-	_ = appdb.DB.QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, offer.SellerID).Scan(&sellerUserID)
+	_ = centralShardDB().QueryRowContext(ctx, `SELECT user_id FROM Member WHERE MemberID = ?`, offer.SellerID).Scan(&sellerUserID)
 	if !mw.IsOwnerOrAdmin(ctx, sellerUserID) {
 		mw.RespondForbidden(w)
 		return

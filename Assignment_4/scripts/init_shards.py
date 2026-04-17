@@ -27,7 +27,6 @@ from implementation.shard_router import DEFAULT_SHARD_COUNT
 CENTRAL_SHARD_INDEX = 0
 
 PARTITION_TABLES = [
-    "Member",
     "WishRequest",
     "WishRequestImage",
     "Listing",
@@ -50,6 +49,7 @@ CENTRAL_TABLES = [
     "sys_user_role",
     "audit_log",
     "Administrator",
+    "Member",
 ]
 
 REPLICATED_TABLES = [

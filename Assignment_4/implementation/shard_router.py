@@ -44,7 +44,7 @@ TABLE_ROUTING = {
     "sys_session": ("session_id", "central"),
     "sys_user": ("user_id", "central"),
     "sys_user_role": ("user_id", "central"),
-    "Member": ("MemberID", "partition"),
+    "Member": ("MemberID", "central"),
     "WishRequest": ("WishRequestID", "partition"),
     "Listing": ("ListingID", "partition"),
     "ListingImage": ("ImageID", "partition"),

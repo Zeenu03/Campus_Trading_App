@@ -61,7 +61,6 @@ SCHEMA_TABLES = [
 ]
 
 PARTITION_TABLES = [
-    "Member",
     "WishRequest",
     "WishRequestImage",
     "Listing",
@@ -84,6 +83,7 @@ CENTRAL_TABLES = [
     "sys_session",
     "audit_log",
     "Administrator",
+    "Member",
 ]
 
 REPLICATED_TABLES = [
@@ -97,7 +97,6 @@ TABLES_FOR_SHARD = {
 }
 
 PARTITION_ROUTE_COLUMNS = {
-    "Member": "MemberID",
     "WishRequest": "WishRequestID",
     "WishRequestImage": "WishRequestID",
     "Listing": "ListingID",
